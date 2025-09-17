@@ -1,188 +1,200 @@
-// /api/locate.js
-// Looks up a feature (dataset + assetId) OR accepts raw GeoJSON.
-// Returns centroid, bounds, Google Maps link for UI preview.
+// api/locate.js
+// Returns a centroid + Google Maps link for a given assetId & dataset.
+// Shares the same dataset registry logic as convert.js (keep them in sync).
 
-export const config = {
-  api: { bodyParser: false },
-};
+import axios from "axios";
 
-// ------------------ helpers ------------------
-function enableCORS(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
-
-async function readJsonBody(req) {
-  const chunks = [];
-  for await (const c of req) chunks.push(c);
-  const raw = Buffer.concat(chunks).toString("utf8") || "{}";
-  try { return JSON.parse(raw); } catch { throw new Error("Invalid JSON body"); }
-}
-
-function buildWhere(idFields, input) {
-  const safe = String(input ?? "").trim().replace(/'/g, "''");
-  if (!safe) return "1=2";
-  const exact = idFields.map(f => `${encodeURIComponent(f)}='${encodeURIComponent(safe)}'`);
-  const like  = idFields.map(f => `${encodeURIComponent(f)} like '%25${encodeURIComponent(safe)}%25'`);
-  return `(${exact.join(" OR ")}) OR (${like.join(" OR ")})`;
-}
-
-async function fetchArcgisGeoJSON(base, where) {
-  const url = `${base}/query?where=${where}&outFields=*&returnGeometry=true&outSR=4326&f=geojson`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`ArcGIS request failed (${r.status})`);
-  return await r.json();
-}
-
-function isFeatureCollection(g) {
-  return g && g.type === "FeatureCollection" && Array.isArray(g.features);
-}
-
-function centroidOfFeatureCollection(fc) {
-  const pts = [];
-  const push = ([x, y]) => Number.isFinite(x) && Number.isFinite(y) && pts.push([x, y]);
-
-  function walk(geom) {
-    if (!geom || !geom.coordinates) return;
-    const { type, coordinates } = geom;
-    switch (type) {
-      case "Point": push(coordinates); break;
-      case "MultiPoint":
-      case "LineString": coordinates.forEach(push); break;
-      case "MultiLineString":
-      case "Polygon": coordinates.flat(1).forEach(push); break;
-      case "MultiPolygon": coordinates.flat(2).forEach(push); break;
-    }
-  }
-
-  for (const f of fc.features || []) walk(f.geometry);
-  if (!pts.length) return null;
-  const [sx, sy] = pts.reduce((a, [x, y]) => [a[0] + x, a[1] + y], [0, 0]);
-  return { lng: sx / pts.length, lat: sy / pts.length };
-}
-
-function boundsOfFeatureCollection(fc) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const expand = ([x, y]) => {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    if (x < minX) minX = x; if (y < minY) minY = y;
-    if (x > maxX) maxX = x; if (y > maxY) maxY = y;
-  };
-
-  function walk(geom) {
-    if (!geom || !geom.coordinates) return;
-    const { type, coordinates } = geom;
-    switch (type) {
-      case "Point": expand(coordinates); break;
-      case "MultiPoint":
-      case "LineString": coordinates.forEach(expand); break;
-      case "MultiLineString":
-      case "Polygon": coordinates.flat(1).forEach(expand); break;
-      case "MultiPolygon": coordinates.flat(2).forEach(expand); break;
-    }
-  }
-
-  for (const f of fc.features || []) walk(f.geometry);
-  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
-  return { west: minX, south: minY, east: maxX, north: maxY };
-}
-
-function googleMapsLinkFromCentroid(c) {
-  return c ? `https://www.google.com/maps?q=${c.lat},${c.lng}&z=19` : null;
-}
-
-// ------------------ datasets (same as convert.js) ------------------
 const DATASETS = {
   fairfax_bmps: {
-    base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
-    idFields: ["FACILITY_ID"]
+    type: "single",
+    layers: [{ base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7" }],
   },
-  mdsha_landscape: {
-    base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
-    idFields: ["LOD_ID", "SITE_ID", "SITE_CODE", "NAME", "PROJECT_ID"]
+  mdsha_tmdl_structures: { type: "single", layers: [{ base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0" }] },
+  mdsha_tmdl_retrofits: { type: "single", layers: [{ base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1" }] },
+  mdsha_tmdl_tree_plantings: { type: "single", layers: [{ base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2" }] },
+  mdsha_tmdl_pavement_removals: { type: "single", layers: [{ base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3" }] },
+  mdsha_tmdl_stream_restorations: { type: "single", layers: [{ base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4" }] },
+  mdsha_tmdl_outfall_stabilizations: { type: "single", layers: [{ base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5" }] },
+
+  mdsha_tmdl_any: {
+    type: "multi",
+    layers: [
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0" },
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1" },
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2" },
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3" },
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4" },
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5" },
+    ],
   },
-  mdsha_tmdl_structures: {
-    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"]
-  },
-  mdsha_tmdl_retrofits: {
-    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"]
-  },
-  mdsha_tmdl_tree_plantings: {
-    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
-  },
-  mdsha_tmdl_pavement_removals: {
-    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
-  },
-  mdsha_tmdl_stream_restorations: {
-    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
-  },
-  mdsha_tmdl_outfall_stabilizations: {
-    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
-  }
 };
 
-// ------------------ handler ------------------
-export default async function handler(req, res) {
-  enableCORS(res);
-  if (req.method === "OPTIONS") return res.status(200).end();
+const CANDIDATE_ID_FIELDS = [
+  "FACILITY_ID",
+  "LOD_ID",
+  "STRU_ID",
+  "STRUCTURE_ID",
+  "ASSET_ID",
+  "SWM_FAC_NO",
+  "NAME",
+  "PROJECT_ID",
+];
+
+const q = (params) =>
+  Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+
+async function fetchLayerMeta(base) {
+  const url = `${base}?f=pjson`;
+  const { data } = await axios.get(url, { timeout: 20000 });
+  return data;
+}
+
+function buildWhereClause(id, metaFields) {
+  const available = new Set(metaFields.map((f) => f.name.toUpperCase()));
+  const fields = CANDIDATE_ID_FIELDS.filter((f) => available.has(f));
+  if (fields.length === 0) return null;
+
+  const esc = id.replace(/'/g, "''");
+  const equals = fields.map((f) => `${f}='${esc}'`);
+  const likes = fields.map((f) => `UPPER(${f}) LIKE '%${esc.toUpperCase()}%'`);
+  return `(${equals.join(" OR ")}) OR (${likes.join(" OR ")})`;
+}
+
+async function fetchFeature(base, where) {
+  // Prefer GeoJSON, fallback to Esri JSON
+  const gjUrl = `${base}/query?${q({
+    where,
+    outFields: "*",
+    returnGeometry: "true",
+    outSR: "4326",
+    f: "geojson",
+  })}`;
 
   try {
+    const { data } = await axios.get(gjUrl, { timeout: 25000 });
+    if (data?.features?.length) {
+      return data.features[0];
+    }
+  } catch {
+    // ignore; fallback
+  }
+
+  const esriUrl = `${base}/query?${q({
+    where,
+    outFields: "*",
+    returnGeometry: "true",
+    outSR: "4326",
+    f: "json",
+  })}`;
+
+  const { data: esri } = await axios.get(esriUrl, { timeout: 25000 });
+  if (!esri?.features?.length) return null;
+
+  // Convert centroid from Esri geometry
+  const feat = esri.features[0];
+  const centroid = computeEsriCentroid(feat.geometry, esri.geometryType);
+  return {
+    type: "Feature",
+    properties: feat.attributes || {},
+    geometry: centroid ? { type: "Point", coordinates: centroid } : null,
+  };
+}
+
+function computeEsriCentroid(geom, gType) {
+  if (!geom) return null;
+  const t = (gType || "").toLowerCase();
+
+  if (t.includes("point")) return [geom.x, geom.y];
+
+  if (t.includes("polyline") && geom.paths?.length) {
+    const coords = geom.paths.flat();
+    const [xAvg, yAvg] = avgXY(coords);
+    return [xAvg, yAvg];
+  }
+
+  if (t.includes("polygon") && geom.rings?.length) {
+    // average of first ring
+    const ring = geom.rings[0];
+    const [xAvg, yAvg] = avgXY(ring);
+    return [xAvg, yAvg];
+  }
+  return null;
+}
+
+function avgXY(points) {
+  let sx = 0,
+    sy = 0;
+  const n = points.length;
+  for (const [x, y] of points) {
+    sx += x;
+    sy += y;
+  }
+  return [sx / n, sy / n];
+}
+
+async function tryLayer(base, assetId) {
+  const meta = await fetchLayerMeta(base);
+  const where = buildWhereClause(assetId, meta.fields || []);
+  if (!where) return null;
+
+  const feature = await fetchFeature(base, where);
+  if (!feature) return null;
+
+  const [lng, lat] = feature.geometry?.coordinates || [];
+  return { lat, lng, usedLayer: base, props: feature.properties || {} };
+}
+
+export default async function handler(req, res) {
+  try {
     if (req.method !== "POST") {
-      return res.status(405).json({
-        error: "Use POST with JSON body { assetId?, dataset?, geojson?, geojsonUrl? }"
-      });
+      res.status(405).json({ error: "Use POST with JSON body { assetId, dataset }" });
+      return;
     }
 
-    const body = await readJsonBody(req);
-    const { assetId, dataset, geojson, geojsonUrl } = body;
+    const { assetId, dataset } = req.body || {};
+    if (!assetId || !dataset) {
+      res.status(400).json({ error: "Missing assetId or dataset" });
+      return;
+    }
 
-    let fc;
-    let whereUsed = null;
+    const ds = DATASETS[dataset];
+    if (!ds) {
+      res.status(400).json({ error: `Unknown dataset '${dataset}'` });
+      return;
+    }
 
-    if (geojson || geojsonUrl) {
-      const data = geojson
-        ? (typeof geojson === "string" ? JSON.parse(geojson) : geojson)
-        : await (await fetch(geojsonUrl)).json();
-
-      if (!isFeatureCollection(data)) {
-        return res.status(400).json({ error: "Provided GeoJSON is not a FeatureCollection" });
-      }
-      fc = data;
+    let result = null;
+    if (ds.type === "single") {
+      result = await tryLayer(ds.layers[0].base, assetId);
     } else {
-      const cfg = DATASETS[dataset];
-      if (!cfg) return res.status(400).json({ error: `Unknown dataset: ${dataset}` });
-      if (!assetId) return res.status(400).json({ error: "assetId is required when not sending geojson/geojsonUrl" });
-
-      const where = buildWhere(cfg.idFields, assetId);
-      whereUsed = where;
-      const data = await fetchArcgisGeoJSON(cfg.base, where);
-      if (!isFeatureCollection(data) || !data.features.length) {
-        return res.status(404).json({ error: "No feature found", dataset, where: decodeURIComponent(where) });
+      for (const lyr of ds.layers) {
+        result = await tryLayer(lyr.base, assetId);
+        if (result) break;
       }
-      fc = data;
     }
 
-    const centroid = centroidOfFeatureCollection(fc);
-    const bounds = boundsOfFeatureCollection(fc);
-    const googleMapsUrl = googleMapsLinkFromCentroid(centroid);
+    if (!result) {
+      const vpnHint = ds.layers.some((l) => l.base.includes("maps.roads.maryland.gov"))
+        ? " (If you are on MDOT SHA datasets, make sure VPN is connected.)"
+        : "";
+      res.status(404).json({ error: `No feature found for '${assetId}' in ${dataset}.${vpnHint}` });
+      return;
+    }
 
-    return res.status(200).json({
-      ok: true,
-      featureCount: fc.features?.length || 0,
-      centroid,
-      bounds,
-      googleMapsUrl,
-      where: whereUsed ? decodeURIComponent(whereUsed) : undefined
+    const gmaps = `https://www.google.com/maps/search/?api=1&query=${result.lat},${result.lng}`;
+    res.status(200).json({
+      assetId,
+      dataset,
+      lat: result.lat,
+      lng: result.lng,
+      gmaps,
+      usedLayer: result.usedLayer,
+      properties: result.props,
     });
   } catch (err) {
-    console.error("locate error:", err);
-    return res.status(500).json({ error: "Locate failed", details: String(err?.message || err) });
+    const msg = err?.response?.data?.error?.message || err?.message || "Unknown error";
+    res.status(500).json({ error: `Locate failed: ${msg}` });
   }
 }
