@@ -61,12 +61,18 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ assetId: asset, dataset })
           });
-          if (!resp.ok) {
-            let msg = `Request failed (HTTP ${resp.status})`;
-            try { const err = await resp.json(); if (err?.error) msg = err.error; } catch {}
-            statusEl.textContent = msg;
-            btn.disabled = false;
-            return;
+         if (!resp.ok) {
+  let msg = `Request failed (HTTP ${resp.status})`;
+  try {
+    const err = await resp.json();
+    if (err?.error) msg = err.error + (err?.details ? ` — ${err.details}` : "");
+  } catch {
+    try { msg += " — " + (await resp.text()).slice(0, 160); } catch {}
+  }
+  statusEl.textContent = msg;
+  btn.disabled = false;
+  return;
+}
           }
           const blob = await resp.blob();
           const url = URL.createObjectURL(blob);
