@@ -1,14 +1,12 @@
 // /api/locate.js
-// Looks up a feature (dataset+assetId) OR accepts raw GeoJSON, and returns centroid,
-// Google Maps link, and simple bounds — for your UI to show a preview/link.
+// Looks up a feature (dataset + assetId) OR accepts raw GeoJSON.
+// Returns centroid, bounds, Google Maps link for UI preview.
 
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
 
-// ---------- Utilities ----------
+// ------------------ helpers ------------------
 function enableCORS(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
@@ -19,15 +17,11 @@ async function readJsonBody(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const raw = Buffer.concat(chunks).toString("utf8") || "{}";
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new Error("Invalid JSON body");
-  }
+  try { return JSON.parse(raw); } catch { throw new Error("Invalid JSON body"); }
 }
 
 function buildWhere(idFields, input) {
-  const safe = String(input ?? "").replace(/'/g, "''");
+  const safe = String(input ?? "").trim().replace(/'/g, "''");
   if (!safe) return "1=2";
   const exact = idFields.map(f => `${encodeURIComponent(f)}='${encodeURIComponent(safe)}'`);
   const like  = idFields.map(f => `${encodeURIComponent(f)} like '%25${encodeURIComponent(safe)}%25'`);
@@ -35,10 +29,7 @@ function buildWhere(idFields, input) {
 }
 
 async function fetchArcgisGeoJSON(base, where) {
-  const url =
-    `${base}/query?where=${where}` +
-    `&outFields=*` +
-    `&returnGeometry=true&outSR=4326&f=geojson`;
+  const url = `${base}/query?where=${where}&outFields=*&returnGeometry=true&outSR=4326&f=geojson`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`ArcGIS request failed (${r.status})`);
   return await r.json();
@@ -50,45 +41,38 @@ function isFeatureCollection(g) {
 
 function centroidOfFeatureCollection(fc) {
   const pts = [];
+  const push = ([x, y]) => Number.isFinite(x) && Number.isFinite(y) && pts.push([x, y]);
 
-  function pushCoord([x, y]) {
-    if (Number.isFinite(x) && Number.isFinite(y)) pts.push([x, y]);
-  }
-  function walkGeom(geom) {
-    if (!geom) return;
+  function walk(geom) {
+    if (!geom || !geom.coordinates) return;
     const { type, coordinates } = geom;
-    if (!coordinates) return;
     switch (type) {
-      case "Point": pushCoord(coordinates); break;
+      case "Point": push(coordinates); break;
       case "MultiPoint":
-      case "LineString": coordinates.forEach(pushCoord); break;
+      case "LineString": coordinates.forEach(push); break;
       case "MultiLineString":
-      case "Polygon": coordinates.flat(1).forEach(pushCoord); break;
-      case "MultiPolygon": coordinates.flat(2).forEach(pushCoord); break;
-      default: break;
+      case "Polygon": coordinates.flat(1).forEach(push); break;
+      case "MultiPolygon": coordinates.flat(2).forEach(push); break;
     }
   }
-  for (const f of fc.features || []) walkGeom(f.geometry);
+
+  for (const f of fc.features || []) walk(f.geometry);
   if (!pts.length) return null;
-  const [sx, sy] = pts.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y], [0, 0]);
-  const cx = sx / pts.length, cy = sy / pts.length;
-  return { lng: cx, lat: cy };
+  const [sx, sy] = pts.reduce((a, [x, y]) => [a[0] + x, a[1] + y], [0, 0]);
+  return { lng: sx / pts.length, lat: sy / pts.length };
 }
 
 function boundsOfFeatureCollection(fc) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-  function expand([x, y]) {
+  const expand = ([x, y]) => {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x > maxX) maxX = x;
-    if (y > maxY) maxY = y;
-  }
+    if (x < minX) minX = x; if (y < minY) minY = y;
+    if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+  };
+
   function walk(geom) {
-    if (!geom) return;
+    if (!geom || !geom.coordinates) return;
     const { type, coordinates } = geom;
-    if (!coordinates) return;
     switch (type) {
       case "Point": expand(coordinates); break;
       case "MultiPoint":
@@ -96,20 +80,19 @@ function boundsOfFeatureCollection(fc) {
       case "MultiLineString":
       case "Polygon": coordinates.flat(1).forEach(expand); break;
       case "MultiPolygon": coordinates.flat(2).forEach(expand); break;
-      default: break;
     }
   }
+
   for (const f of fc.features || []) walk(f.geometry);
-  if ([minX, minY, maxX, maxY].some(v => !Number.isFinite(v))) return null;
+  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
   return { west: minX, south: minY, east: maxX, north: maxY };
 }
 
 function googleMapsLinkFromCentroid(c) {
-  if (!c) return null;
-  return `https://www.google.com/maps?q=${c.lat},${c.lng}&z=19`;
+  return c ? `https://www.google.com/maps?q=${c.lat},${c.lng}&z=19` : null;
 }
 
-// ---------- DATASETS (same as convert.js) ----------
+// ------------------ datasets (same as convert.js) ------------------
 const DATASETS = {
   fairfax_bmps: {
     base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
@@ -145,14 +128,16 @@ const DATASETS = {
   }
 };
 
-// ---------- Handler ----------
+// ------------------ handler ------------------
 export default async function handler(req, res) {
   enableCORS(res);
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
     if (req.method !== "POST") {
-      return res.status(405).json({ error: "Use POST with JSON body { assetId?, dataset?, geojson?, geojsonUrl? }" });
+      return res.status(405).json({
+        error: "Use POST with JSON body { assetId?, dataset?, geojson?, geojsonUrl? }"
+      });
     }
 
     const body = await readJsonBody(req);
@@ -179,21 +164,21 @@ export default async function handler(req, res) {
       whereUsed = where;
       const data = await fetchArcgisGeoJSON(cfg.base, where);
       if (!isFeatureCollection(data) || !data.features.length) {
-        return res.status(404).json({ error: "No feature found", where, dataset });
+        return res.status(404).json({ error: "No feature found", dataset, where: decodeURIComponent(where) });
       }
       fc = data;
     }
 
-    const center = centroidOfFeatureCollection(fc);
+    const centroid = centroidOfFeatureCollection(fc);
     const bounds = boundsOfFeatureCollection(fc);
-    const mapsUrl = googleMapsLinkFromCentroid(center);
+    const googleMapsUrl = googleMapsLinkFromCentroid(centroid);
 
     return res.status(200).json({
       ok: true,
       featureCount: fc.features?.length || 0,
-      centroid: center,
+      centroid,
       bounds,
-      googleMapsUrl: mapsUrl,
+      googleMapsUrl,
       where: whereUsed ? decodeURIComponent(whereUsed) : undefined
     });
   } catch (err) {
