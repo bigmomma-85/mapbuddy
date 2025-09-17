@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StormKML — Asset → KML Converter</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#f6f7fb; margin:0; padding:24px; }
+      .card { max-width: 760px; margin: 0 auto; background:#fff; border:1px solid #e9ecf2; border-radius:12px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.03); }
+      h1 { margin:0 0 8px; font-size: 24px; }
+      p { margin: 0 0 16px; color:#445; }
+      label { display:block; font-size:14px; color:#334; margin:12px 0 6px; }
+      input, select, button { width:100%; padding:12px; font-size:16px; border:1px solid #cfd6e4; border-radius:8px; }
+      button { background:#0b72ff; color:white; border:none; margin-top:16px; cursor:pointer; }
+      button:disabled { background:#8fb6ff; cursor:not-allowed; }
+      small { color:#667; }
+      .row { display:grid; grid-template-columns: 1fr; gap:12px; }
+      @media (min-width:720px) { .row { grid-template-columns: 2fr 1fr; } }
+      #status { margin-top:12px; min-height:20px; color:#222; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>StormKML — Asset → KML Converter</h1>
+      <p>Enter an Asset / BMP ID, select a dataset, and download a KML generated from ArcGIS GeoJSON.</p>
+
+      <div class="row">
+        <div>
+          <label>Asset / BMP ID</label>
+          <input id="asset" placeholder="e.g., 1373DP, WP0399, LOD_12345" />
+        </div>
+        <div>
+          <label>Dataset</label>
+          <select id="dataset">
+            <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
+            <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="go">Get KML</button>
+      <div id="status"></div>
+      <small>Tip: Add more datasets in <code>api/convert.js</code> later.</small>
+    </div>
+
+    <script>
+      const btn = document.getElementById('go');
+      const statusEl = document.getElementById('status');
+
+      btn.addEventListener('click', async () => {
+        const asset = document.getElementById('asset').value.trim();
+        const dataset = document.getElementById('dataset').value;
+        if (!asset) { statusEl.textContent = 'Please enter an Asset / BMP ID.'; return; }
+
+        btn.disabled = true;
+        statusEl.textContent = 'Converting…';
+
+        try {
+          const resp = await fetch('/api/convert', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ assetId: asset, dataset })
+          });
+          if (!resp.ok) {
+            let msg = `Request failed (HTTP ${resp.status})`;
+            try { const err = await resp.json(); if (err?.error) msg = err.error; } catch {}
+            statusEl.textContent = msg;
+            btn.disabled = false;
+            return;
+          }
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = asset + '.kml';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          statusEl.textContent = 'KML downloaded.';
+        } catch (e) {
+          statusEl.textContent = 'Network or server error. Please try again.';
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
