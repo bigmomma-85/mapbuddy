@@ -4,14 +4,14 @@ import mapshaperModule from "mapshaper";
 
 export const config = { runtime: "nodejs", maxDuration: 20 };
 
-// Make Mapshaper API resilient across export styles
+// Make Mapshaper API resilient to different export styles
 const MS = mapshaperModule?.default ?? mapshaperModule;
 const run =
   MS?.applyCommands
     ? (cmds, files) => MS.applyCommands(cmds, files)
     : (cmds, files) => MS.runCommands(cmds, files);
 
-// Robust JSON body reader for Vercel Node functions
+// Robust JSON body reader (works on Vercel Node functions)
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
   if (typeof req.body === "string") {
@@ -20,9 +20,7 @@ async function readJsonBody(req) {
   return await new Promise((resolve) => {
     let data = "";
     req.on("data", (c) => (data += c));
-    req.on("end", () => {
-      try { resolve(JSON.parse(data || "{}")); } catch { resolve({}); }
-    });
+    req.on("end", () => { try { resolve(JSON.parse(data || "{}")); } catch { resolve({}); } });
   });
 }
 
@@ -61,29 +59,34 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Query ArcGIS for GeoJSON
     const safeId = String(assetId).replace(/'/g, "''");
     const where = encodeURIComponent(cfg.idField) + "='" + encodeURIComponent(safeId) + "'";
     const url = `${cfg.base}/query?where=${where}&outFields=*&f=geojson`;
 
     const { data } = await axios.get(url, { timeout: 20000 });
-
     if (!data || !data.features || data.features.length === 0) {
       res.status(404).json({ error: `No feature found for ${assetId} in ${dataset}` });
       return;
     }
 
+    // Convert GeoJSON -> KML with Mapshaper (name an output file)
     const inputName = "asset.geojson";
+    const outputName = "out.kml";
     const geojsonStr = JSON.stringify(data);
-    const commands = `-i ${inputName} -o format=kml precision=0.000001 stdout`;
+    const commands = `-i ${inputName} -o ${outputName} format=kml precision=0.000001`;
 
     const out = await run(commands, { [inputName]: geojsonStr });
-    const kmlBuf = Buffer.from(out["stdout"]);
+    const kmlText = out?.[outputName];
+    if (!kmlText) {
+      throw new Error("Mapshaper produced no KML (out.kml not found)");
+    }
 
+    // Return as a download
     res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
     res.setHeader("Content-Disposition", `attachment; filename="${assetId}.kml"`);
-    res.status(200).send(kmlBuf);
+    res.status(200).send(Buffer.from(kmlText));
   } catch (err) {
-    // Send rich details to the client and log in Vercel Runtime Logs
     const details = (err && (err.stack || err.message)) ? (err.stack || err.message) : String(err);
     console.error("[/api/convert] ERROR:", details);
     res.status(500).json({ error: "Conversion failed", details });
