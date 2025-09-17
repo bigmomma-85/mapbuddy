@@ -1,27 +1,42 @@
+// api/convert.js
 import axios from "axios";
-import * as mapshaper from "mapshaper";
+import mapshaperModule from "mapshaper";
 
 export const config = { runtime: "nodejs", maxDuration: 20 };
 
+// Make Mapshaper API resilient across export styles
+const MS = mapshaperModule?.default ?? mapshaperModule;
+const run =
+  MS?.applyCommands
+    ? (cmds, files) => MS.applyCommands(cmds, files)
+    : (cmds, files) => MS.runCommands(cmds, files);
+
+// Robust JSON body reader for Vercel Node functions
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
-  if (typeof req.body === "string") { try { return JSON.parse(req.body); } catch { return {}; } }
+  if (typeof req.body === "string") {
+    try { return JSON.parse(req.body); } catch { return {}; }
+  }
   return await new Promise((resolve) => {
     let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => { try { resolve(JSON.parse(data || "{}")); } catch { resolve({}); } });
+    req.on("data", (c) => (data += c));
+    req.on("end", () => {
+      try { resolve(JSON.parse(data || "{}")); } catch { resolve({}); }
+    });
   });
 }
 
 const DATASETS = {
+  // Fairfax County DPWES Stormwater Facilities (Layer 7) | field: FACILITY_ID
   fairfax_bmps: {
     base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
-    idField: "FACILITY_ID"
+    idField: "FACILITY_ID",
   },
+  // MDOT SHA Managed Landscape (Layer 0) | field: LOD_ID
   mdsha_landscape: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
-    idField: "LOD_ID"
-  }
+    idField: "LOD_ID",
+  },
 };
 
 export default async function handler(req, res) {
@@ -51,6 +66,7 @@ export default async function handler(req, res) {
     const url = `${cfg.base}/query?where=${where}&outFields=*&f=geojson`;
 
     const { data } = await axios.get(url, { timeout: 20000 });
+
     if (!data || !data.features || data.features.length === 0) {
       res.status(404).json({ error: `No feature found for ${assetId} in ${dataset}` });
       return;
@@ -59,13 +75,17 @@ export default async function handler(req, res) {
     const inputName = "asset.geojson";
     const geojsonStr = JSON.stringify(data);
     const commands = `-i ${inputName} -o format=kml precision=0.000001 stdout`;
-    const out = await mapshaper.applyCommands(commands, { [inputName]: geojsonStr });
 
+    const out = await run(commands, { [inputName]: geojsonStr });
     const kmlBuf = Buffer.from(out["stdout"]);
+
     res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
     res.setHeader("Content-Disposition", `attachment; filename="${assetId}.kml"`);
     res.status(200).send(kmlBuf);
   } catch (err) {
-    res.status(500).json({ error: "Conversion failed", details: err?.message || String(err) });
+    // Send rich details to the client and log in Vercel Runtime Logs
+    const details = (err && (err.stack || err.message)) ? (err.stack || err.message) : String(err);
+    console.error("[/api/convert] ERROR:", details);
+    res.status(500).json({ error: "Conversion failed", details });
   }
 }
