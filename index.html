@@ -18,6 +18,7 @@
       @media (min-width:720px) { .row { grid-template-columns: 2fr 1fr; } }
       #status { margin-top:12px; min-height:20px; color:#222; }
       #mapsLink { margin-top:10px; }
+      .hint { margin-top:8px; color:#777; font-size:13px; }
     </style>
   </head>
   <body>
@@ -27,14 +28,26 @@
 
       <div class="row">
         <div>
-          <label>Asset / BMP ID</label>
-          <input id="asset" placeholder="e.g., 1373DP, WP0399, LOD_12345" />
+          <label for="asset">Asset / BMP ID</label>
+          <input id="asset" placeholder="e.g., 1373DP, WP0399, 210049UT, FR12" />
+          <div class="hint">Note: MDOT SHA layers require VPN.</div>
         </div>
+
         <div>
-          <label>Dataset</label>
-          <select id="dataset">
+          <label for="dataset">Dataset</label>
+          <select id="dataset" name="dataset" style="min-width: 420px">
             <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
             <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
+
+            <optgroup label="MDOT SHA — TMDL">
+              <option value="mdsha_tmdl_any">MDOT SHA — TMDL (Auto-detect)</option>
+              <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures</option>
+              <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
+              <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
+              <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
+              <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
+              <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
+            </optgroup>
           </select>
         </div>
       </div>
@@ -104,10 +117,10 @@
         try {
           // 1) Get centroid + Google Maps link
           const info = await locate(asset, dataset);
-          if (info?.googleMapsUrl) {
+          if (info?.googleMapsUrl && info?.centroid) {
             mapsLinkEl.innerHTML =
               `<a href="${info.googleMapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>` +
-              ` &middot; <small>lat ${info.centroid.lat.toFixed(6)}, lng ${info.centroid.lng.toFixed(6)}</small>`;
+              ` &middot; <small>lat ${Number(info.centroid.lat).toFixed(6)}, lng ${Number(info.centroid.lng).toFixed(6)}</small>`;
           }
 
           // 2) Download the KML
