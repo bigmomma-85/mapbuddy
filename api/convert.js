@@ -186,15 +186,32 @@ export default async function handler(req, res) {
     const center = centroidOfFeatureCollection(fc);
     const mapsUrl = googleMapsLinkFromCentroid(center);
 
-    // 3) Convert to KML with mapshaper
-    const ms = await import("mapshaper");
-    const inputs = { "in.json": JSON.stringify(fc) };
-    const outputs = {};
-    const cmd = `-i in.json -o format=kml precision=0.000001 out.kml`;
-    await ms.applyCommands(cmd, { inputs, outputs });
+   // --- Mapshaper conversion (ESM/CommonJS safe) ---
+const mod = await import("mapshaper");
+const ms = mod.default || mod;
 
-    const kml = outputs["out.kml"];
-    if (!kml) throw new Error("KML conversion failed");
+const inputs = { "in.json": JSON.stringify(fc) };
+const outputs = {};
+const cmd = `-i in.json -o format=kml precision=0.000001 out.kml`;
+
+if (typeof ms.applyCommands === "function") {
+  // modern promise API
+  await ms.applyCommands(cmd, { inputs, outputs });
+} else if (typeof ms.runCommands === "function") {
+  // older callback API
+  await new Promise((resolve, reject) => {
+    ms.runCommands(cmd, inputs, (err, out) => {
+      if (err) return reject(err);
+      Object.assign(outputs, out || {});
+      resolve();
+    });
+  });
+} else {
+  throw new Error("Mapshaper API not found (no applyCommands/runCommands)");
+}
+
+const kml = outputs["out.kml"];
+if (!kml) throw new Error("KML conversion failed (no out.kml produced)");
 
     // 4) Send KML file (attachment) + helpful headers
     const fname = (filename || (Array.isArray(fc.features) && fc.features[0]?.properties?.FACILITY_ID) || "export") + ".kml";
