@@ -1,199 +1,212 @@
 // api/bulk.js
-// Bulk convert many asset IDs into ONE download (KML / GeoJSON / Shapefile)
+// Combine many assets into one download (KML / GeoJSON / Shapefile) with a REQUIRED dataset,
+// either from the "defaultDataset" form field or per-row override in items[].dataset.
+// NO auto-detect here.
 
 import axios from "axios";
+
+// Make sure we're on Node (NOT Edge)
 export const config = { runtime: "nodejs" };
 
-// ---- same dataset registry as convert.js (keep in sync) ----
+// Try both ESM/CJS shims so mapshaper.applyCommands is always available
+async function getMapshaperApply() {
+  const ms = await import("mapshaper");
+  const apply =
+    ms.applyCommands ||
+    (ms.default && ms.default.applyCommands) ||
+    null;
+  if (!apply) {
+    throw new Error("Mapshaper API not available (applyCommands missing)");
+  }
+  return apply;
+}
+
+// ---- Dataset registry (same keys you use in /api/convert.js & UI) ----
 const DATASETS = {
   fairfax_bmps: {
     base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
-    idFields: ["FACILITY_ID"],
-    label: "Fairfax — Stormwater Facilities",
+    idField: "FACILITY_ID",
   },
   mdsha_landscape: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
-    idFields: ["LOD_ID"],
-    label: "MDOT SHA — Managed Landscape",
+    idField: "LOD_ID",
   },
+
+  // TMDL group + individual layers
+  mdsha_tmdl_any: {
+    // pseudo-dataset to allow "any TMDL layer" — we’ll search in the layer order below
+    layers: [
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2", idField: "STRU_ID" }, // Tree Plantings
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0", idField: "SWM_FAC_NO" }, // Control Structures
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1", idField: "SWM_FAC_NO" }, // Retrofits
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3", idField: "STRU_ID" }, // Pavement Removals
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4", idField: "STRU_ID" }, // Stream Restorations
+      { base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5", idField: "STRU_ID" }, // Outfall Stabilizations
+    ],
+  },
+
   mdsha_tmdl_structures: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"],
-    label: "TMDL — Stormwater Control Structures",
+    idField: "SWM_FAC_NO",
   },
   mdsha_tmdl_retrofits: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"],
-    label: "TMDL — Retrofits",
+    idField: "SWM_FAC_NO",
   },
   mdsha_tmdl_tree_plantings: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2",
-    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
-    label: "TMDL — Tree Plantings",
+    idField: "STRU_ID",
   },
   mdsha_tmdl_pavement_removals: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3",
-    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
-    label: "TMDL — Pavement Removals",
+    idField: "STRU_ID",
   },
   mdsha_tmdl_stream_restorations: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4",
-    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
-    label: "TMDL — Stream Restorations",
+    idField: "STRU_ID",
   },
   mdsha_tmdl_outfall_stabilizations: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
-    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
-    label: "TMDL — Outfall Stabilizations",
-  }
+    idField: "STRU_ID",
+  },
 };
-const TMDL_ANY = [
-  "mdsha_tmdl_structures",
-  "mdsha_tmdl_retrofits",
-  "mdsha_tmdl_tree_plantings",
-  "mdsha_tmdl_pavement_removals",
-  "mdsha_tmdl_stream_restorations",
-  "mdsha_tmdl_outfall_stabilizations",
-];
 
-function guessDatasetFromId(id) {
-  if (!id) return null;
-  const s = id.trim().toUpperCase();
-  if (/^WP\d{3,}$/.test(s)) return "fairfax_bmps";
-  if (s.startsWith("LOD_")) return "mdsha_landscape";
-  if (/(UT|TR|SR|OF|PR)\s*$/.test(s)) return "mdsha_tmdl_any";
-  return null;
-}
-
+// ---- helpers ----
 async function readJson(req) {
-  const chunks = []; for await (const c of req) chunks.push(c);
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch { return {}; }
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  try { return JSON.parse(raw || "{}"); } catch { return {}; }
 }
-function buildWhere(idFields, assetId) {
-  const esc = (v) => `'${String(v).replace(/'/g, "''")}'`;
-  return idFields.map((f) => `${f}=${esc(assetId)}`).join(" OR ");
+
+function buildQueryUrl(base, idField, idVal) {
+  const params = new URLSearchParams({
+    where: `${idField}='${encodeURIComponent(idVal).replace(/'/g, "''")}'`,
+    outFields: "*",
+    returnGeometry: "true",
+    outSR: "4326",
+    f: "json",
+  });
+  return `${base}/query?${params.toString()}`;
 }
-async function fetchArcgisGeoJSON(base, where) {
-  const u1 = `${base}/query?where=${encodeURIComponent(where)}&outFields=*&returnGeometry=true&outSR=4326&f=geojson`;
-  let r = await axios.get(u1, { validateStatus: () => true });
-  if (r.status === 200 && r.data && (r.data.type === "FeatureCollection" || r.data.type === "Feature")) {
-    return r.data;
+
+// Search mdsha_tmdl_any across its sublayers in order
+async function fetchFromAnyTMDL(assetId) {
+  for (const layer of DATASETS.mdsha_tmdl_any.layers) {
+    const url = buildQueryUrl(layer.base, layer.idField, assetId);
+    const r = await axios.get(url);
+    if (r.data?.features?.length) return r.data.features;
   }
-  const u2 = `${base}/query?where=${encodeURIComponent(where)}&outFields=*&returnGeometry=true&outSR=4326&f=json`;
-  r = await axios.get(u2, { validateStatus: () => true });
-  if (r.status !== 200 || !r.data || !Array.isArray(r.data.features)) return { type: "FeatureCollection", features: [] };
-  const features = r.data.features.map(esriToGeoJSONFeature).filter(Boolean);
-  return { type: "FeatureCollection", features };
+  return [];
 }
-function esriToGeoJSONFeature(f) {
-  const a = f.attributes || {}, g = f.geometry || {};
-  let geom = null;
-  if (Array.isArray(g.rings)) geom = { type: "Polygon", coordinates: g.rings };
-  else if (Array.isArray(g.paths)) geom = g.paths.length === 1
-    ? { type: "LineString", coordinates: g.paths[0] }
-    : { type: "MultiLineString", coordinates: g.paths };
-  else if (typeof g.x === "number" && typeof g.y === "number")
-    geom = { type: "Point", coordinates: [g.x, g.y] };
-  return geom ? { type: "Feature", properties: a, geometry: geom } : null;
-}
-async function getMapshaperApply() {
-  const ms = await import("mapshaper");
-  return ms.applyCommands || (ms.default && ms.default.applyCommands);
-}
-function castOutput(format) {
-  const f = (format || "kml").toLowerCase();
-  if (f === "geojson") return "geojson";
-  if (f === "shapefile" || f === "shp" || f === "zip") return "shapefile";
-  return "kml";
+
+async function fetchFeatures(datasetKey, assetId) {
+  const def = DATASETS[datasetKey];
+  if (!def) throw new Error(`Unknown dataset '${datasetKey}'`);
+
+  if (datasetKey === "mdsha_tmdl_any") {
+    return await fetchFromAnyTMDL(assetId);
+  }
+
+  const url = buildQueryUrl(def.base, def.idField, assetId);
+  const r = await axios.get(url);
+  return r.data?.features || [];
 }
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Use POST with JSON body { items: [{assetId, dataset?}], defaultDataset?, format }" });
+    return;
+  }
+
   try {
-    if (req.method !== "POST") {
-      res.status(405).json({ error: "Use POST { items: [{assetId,dataset?},...], format? }" });
+    const body = await readJson(req);
+    const items = Array.isArray(body.items) ? body.items : [];
+    const defaultDataset = body.defaultDataset || null; // used for all rows without an explicit dataset
+    const format = (body.format || "kml").toLowerCase(); // kml | geojson | shp
+
+    if (!items.length) {
+      res.status(400).json({ error: "No items provided." });
       return;
     }
-    const { items, format } = await readJson(req);
-    if (!Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ error: "No items provided" }); return;
-    }
 
-    const outFmt = castOutput(format);
-    const features = [];
-    const missed = [];
+    // Collect all features
+    const allFeatures = [];
+    const skipped = [];
 
-    for (const row of items) {
-      const assetId = String(row?.assetId || "").trim();
-      if (!assetId) { missed.push({ assetId, reason: "empty id" }); continue; }
-
-      let datasetKey = row?.dataset || guessDatasetFromId(assetId);
-      const targets = datasetKey === "mdsha_tmdl_any"
-        ? TMDL_ANY
-        : (DATASETS[datasetKey] ? [datasetKey] : []);
-
-      if (targets.length === 0) {
-        missed.push({ assetId, reason: "unknown dataset" }); continue;
+    for (const [idx, row] of items.entries()) {
+      const assetId = String(row.assetId || "").trim();
+      const dataset = String(row.dataset || defaultDataset || "").trim();
+      if (!assetId || !dataset) {
+        skipped.push({ index: idx, assetId, reason: "missing assetId or dataset" });
+        continue;
       }
 
-      let found = false;
-      for (const key of targets) {
-        const ds = DATASETS[key];
-        const where = buildWhere(ds.idFields, assetId);
-        const fc = await fetchArcgisGeoJSON(ds.base, where);
-        const list = fc.type === "Feature" ? [fc] : (fc.features || []);
-        if (list.length > 0) {
-          const ft = list[0];
-          ft.properties = {
-            ...ft.properties,
-            _assetId: assetId,
-            _dataset: key,
-            _sourceLabel: ds.label
-          };
-          features.push(ft);
-          found = true;
-          break;
+      try {
+        const feats = await fetchFeatures(dataset, assetId);
+        if (!feats.length) {
+          skipped.push({ index: idx, assetId, dataset, reason: "no feature found" });
+        } else {
+          // tag each feature with the source id for traceability
+          for (const f of feats) {
+            f.properties = f.properties || {};
+            f.properties.__assetId = assetId;
+            f.properties.__dataset = dataset;
+          }
+          allFeatures.push(...feats);
         }
+      } catch (e) {
+        skipped.push({ index: idx, assetId, dataset, reason: e.message || String(e) });
       }
-      if (!found) missed.push({ assetId, reason: "not found" });
     }
 
-    if (!features.length) {
-      res.status(404).json({ error: "No features found", missed }); return;
+    if (!allFeatures.length) {
+      res.status(404).json({ error: "No features found for any row.", skipped });
+      return;
     }
 
-    const fc = { type: "FeatureCollection", features };
-    const msApply = await getMapshaperApply();
-    if (!msApply) throw new Error("Mapshaper API not available");
+    // Build a FeatureCollection
+    const fc = { type: "FeatureCollection", features: allFeatures };
 
-    const input = { "in.json": Buffer.from(JSON.stringify(fc)) };
-    const outName = outFmt === "kml" ? "out.kml" : (outFmt === "geojson" ? "out.geojson" : "out.zip");
-    const cmd = `-i in.json -clean -o ${outName} format=${outFmt}`;
+    const apply = await getMapshaperApply();
+    const input = { "in.json": JSON.stringify(fc) };
 
-    const outputs = await msApply(cmd, input);
-    const buf = outputs[outName];
-    if (!buf) throw new Error(`Mapshaper produced no ${outName}`);
+    let cmd = "-i in.json -proj wgs84 ";
+    let outName = "mapbuddy";
 
-    // Attach a tiny JSON summary header via filename comment only (no body change)
-    const ts = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0,14);
-    const base = `mapbuddy_bulk_${ts}`;
-
-    if (outFmt === "kml") {
-      res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
-      res.setHeader("Content-Disposition", `attachment; filename="${base}.kml"`);
-    } else if (outFmt === "geojson") {
-      res.setHeader("Content-Type", "application/geo+json");
-      res.setHeader("Content-Disposition", `attachment; filename="${base}.geojson"`);
+    if (format === "geojson") {
+      cmd += "-o out.geojson";
+    } else if (format === "shp" || format === "shapefile") {
+      cmd += "-o format=shapefile out.zip";
+      outName += ".zip";
     } else {
-      res.setHeader("Content-Type", "application/zip");
-      res.setHeader("Content-Disposition", `attachment; filename="${base}.zip"`);
+      // KML default
+      cmd += "-o out.kml";
+      outName += ".kml";
     }
-    // Include X-MapBuddy-Missed header (count)
-    res.setHeader("X-MapBuddy-Missed", String(missed.length));
-    if (missed.length) res.setHeader("X-MapBuddy-Missed-Example", JSON.stringify(missed.slice(0,3)));
 
-    res.status(200).send(buf);
+    const outputs = await apply(cmd, input);
+    const key =
+      format === "geojson" ? "out.geojson" :
+      (format === "shp" || format === "shapefile") ? "out.zip" :
+      "out.kml";
 
-  } catch (err) {
-    res.status(500).json({ error: "Bulk conversion failed", details: String(err?.message || err) });
+    const buf = outputs[key];
+    if (!buf) {
+      res.status(500).json({ error: "Mapshaper did not return an output file." });
+      return;
+    }
+
+    // Content-Type & download name
+    const ctype =
+      format === "geojson" ? "application/geo+json" :
+      (format === "shp" || format === "shapefile") ? "application/zip" :
+      "application/vnd.google-earth.kml+xml";
+
+    res.setHeader("Content-Type", ctype);
+    res.setHeader("Content-Disposition", `attachment; filename="${outName}"`);
+    res.status(200).send(Buffer.isBuffer(buf) ? buf : Buffer.from(buf));
+  } catch (e) {
+    res.status(500).json({ error: e.message || String(e) });
   }
 }
