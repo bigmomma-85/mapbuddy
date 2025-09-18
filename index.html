@@ -5,20 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StormKML — Asset → KML Converter</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#f6f7fb; margin:0; padding:24px; }
-      .card { max-width: 760px; margin: 0 auto; background:#fff; border:1px solid #e9ecf2; border-radius:12px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.03); }
-      h1 { margin:0 0 8px; font-size: 28px; }
-      p { margin: 0 0 16px; color:#445; }
-      label { display:block; font-size:14px; color:#334; margin:12px 0 6px; }
-      input, select, button { width:100%; padding:12px; font-size:16px; border:1px solid #cfd6e4; border-radius:8px; }
-      button { background:#0b72ff; color:white; border:none; margin-top:16px; cursor:pointer; }
-      button:disabled { background:#8fb6ff; cursor:not-allowed; }
-      small { color:#667; }
-      .row { display:grid; grid-template-columns: 1fr; gap:12px; }
-      @media (min-width:720px) { .row { grid-template-columns: 2fr 1fr; } }
-      #status { margin-top:12px; min-height:20px; color:#222; }
-      #mapsLink { margin-top:10px; }
-      .hint { margin-top:8px; color:#777; font-size:13px; }
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7fb;margin:0;padding:24px}
+      .card{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e9ecf2;border-radius:12px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.03)}
+      h1{margin:0 0 8px;font-size:28px} p{margin:0 0 16px;color:#445}
+      label{display:block;font-size:14px;color:#334;margin:12px 0 6px}
+      input,select,button{width:100%;padding:12px;font-size:16px;border:1px solid #cfd6e4;border-radius:8px}
+      button{background:#0b72ff;color:#fff;border:none;margin-top:16px;cursor:pointer}
+      button:disabled{background:#8fb6ff;cursor:not-allowed}
+      small{color:#667}
+      .row{display:grid;grid-template-columns:1fr;gap:12px}
+      @media (min-width:720px){.row{grid-template-columns:2fr 1fr}}
+      #status{margin-top:12px;min-height:20px;color:#222}
+      #mapsLink{margin-top:10px}
     </style>
   </head>
   <body>
@@ -28,18 +26,17 @@
 
       <div class="row">
         <div>
-          <label for="asset">Asset / BMP ID</label>
-          <input id="asset" placeholder="e.g., 1373DP, WP0399, 210049UT, FR12" />
-          <div class="hint">Note: MDOT SHA layers require VPN.</div>
+          <label>Asset / BMP ID</label>
+          <input id="asset" placeholder="e.g., WP0399, 1373DP, 210049UT, LOD_12345" />
         </div>
-
         <div>
-          <label for="dataset">Dataset</label>
-          <select id="dataset" name="dataset" style="min-width: 420px">
-            <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-            <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
-
-            <optgroup label="MDOT SHA — TMDL">
+          <label>Dataset</label>
+          <select id="dataset">
+            <optgroup label="Fairfax">
+              <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
+            </optgroup>
+            <optgroup label="MDOT SHA">
+              <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
               <option value="mdsha_tmdl_any">MDOT SHA — TMDL (Auto-detect)</option>
               <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures</option>
               <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
@@ -52,10 +49,11 @@
         </div>
       </div>
 
+      <small>Note: Some MDOT SHA layers may require VPN. Browser tries direct ArcGIS first; server converts to KML.</small>
+
       <button id="go">Get KML</button>
       <div id="status"></div>
       <div id="mapsLink"></div>
-      <small>Tip: Add more datasets in <code>api/convert.js</code> and <code>api/locate.js</code> later.</small>
     </div>
 
     <script>
@@ -65,11 +63,83 @@
       const assetEl = document.getElementById('asset');
       const datasetEl = document.getElementById('dataset');
 
-      async function locate(asset, dataset) {
+      // client-side mirror (browser-first fetch)
+      const CLIENT_DATASETS = {
+        fairfax_bmps: {
+          base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
+          idFields: ["FACILITY_ID"],
+        },
+        mdsha_landscape: {
+          base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
+          idFields: ["LOD_ID"],
+        },
+        mdsha_tmdl_structures: {
+          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0",
+          idFields: ["SWM_FAC_NO","NAME","PROJECT_ID"],
+        },
+        mdsha_tmdl_retrofits: {
+          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1",
+          idFields: ["SWM_FAC_NO","NAME","PROJECT_ID"],
+        },
+        mdsha_tmdl_tree_plantings: {
+          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2",
+          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
+        },
+        mdsha_tmdl_pavement_removals: {
+          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3",
+          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
+        },
+        mdsha_tmdl_stream_restorations: {
+          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4",
+          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
+        },
+        mdsha_tmdl_outfall_stabilizations: {
+          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
+          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
+        }
+      };
+
+      function buildQueryUrl(base, field, value) {
+        const where = encodeURIComponent(`${field}='${value}'`);
+        return `${base}/query?where=${where}&outFields=*&returnGeometry=true&outSR=4326&f=geojson`;
+      }
+
+      async function browserFetchGeoJSON(asset, dataset) {
+        const keys = (dataset === 'mdsha_tmdl_any')
+          ? [
+              'mdsha_tmdl_structures',
+              'mdsha_tmdl_retrofits',
+              'mdsha_tmdl_tree_plantings',
+              'mdsha_tmdl_pavement_removals',
+              'mdsha_tmdl_stream_restorations',
+              'mdsha_tmdl_outfall_stabilizations'
+            ]
+          : [dataset];
+
+        for (const key of keys) {
+          const cfg = CLIENT_DATASETS[key];
+          if (!cfg) continue;
+          for (const f of cfg.idFields) {
+            try {
+              const url = buildQueryUrl(cfg.base, f, asset);
+              const r = await fetch(url, { credentials: 'include' });
+              if (r.ok) {
+                const data = await r.json();
+                if (data?.features?.length) {
+                  return { type: "FeatureCollection", features: [data.features[0]] };
+                }
+              }
+            } catch {}
+          }
+        }
+        return null;
+      }
+
+      async function locate(asset, dataset, geojson) {
         const r = await fetch('/api/locate', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ assetId: asset, dataset })
+          body: JSON.stringify({ assetId: asset, dataset, geojson })
         });
         if (!r.ok) {
           let msg = `Locate failed (HTTP ${r.status})`;
@@ -79,18 +149,18 @@
         return r.json();
       }
 
-      async function downloadKml(asset, dataset) {
+      async function downloadKml(asset, dataset, geojson) {
         const resp = await fetch('/api/convert', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ assetId: asset, dataset })
+          body: JSON.stringify({ assetId: asset, dataset, geojson })
         });
 
         if (!resp.ok) {
           let msg = `Request failed (HTTP ${resp.status})`;
           try {
             const err = await resp.json();
-            if (err?.error) msg = err.error + (err?.details ? ` — ${err.details}` : '');
+            if (err?.error) msg = err.error;
           } catch {
             try { msg += ' — ' + (await resp.text()).slice(0,160); } catch {}
           }
@@ -111,21 +181,24 @@
         if (!asset) { statusEl.textContent = 'Please enter an Asset / BMP ID.'; return; }
 
         btn.disabled = true;
-        statusEl.textContent = 'Locating…';
+        statusEl.textContent = 'Searching…';
         mapsLinkEl.innerHTML = '';
 
         try {
-          // 1) Get centroid + Google Maps link
-          const info = await locate(asset, dataset);
+          // 1) Browser-first fetch from ArcGIS
+          const fc = await browserFetchGeoJSON(asset, dataset);
+
+          // 2) Get centroid + GMaps (works with browser-fetched or server-fetched)
+          const info = await locate(asset, dataset, fc || undefined);
           if (info?.googleMapsUrl && info?.centroid) {
             mapsLinkEl.innerHTML =
               `<a href="${info.googleMapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>` +
-              ` &middot; <small>lat ${Number(info.centroid.lat).toFixed(6)}, lng ${Number(info.centroid.lng).toFixed(6)}</small>`;
+              ` &middot; <small>lat ${info.centroid.lat.toFixed(6)}, lng ${info.centroid.lng.toFixed(6)}</small>`;
           }
 
-          // 2) Download the KML
+          // 3) Convert to KML (server will use our GeoJSON if present, else it will fetch)
           statusEl.textContent = 'Converting…';
-          await downloadKml(asset, dataset);
+          await downloadKml(asset, dataset, fc || undefined);
           statusEl.textContent = 'KML downloaded.';
         } catch (e) {
           statusEl.textContent = e.message || 'Error';
@@ -134,8 +207,8 @@
         }
       }
 
-      btn.addEventListener('click', handleClick);
-      assetEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleClick(); });
+      document.getElementById('go').addEventListener('click', handleClick);
+      document.getElementById('asset').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleClick(); });
     </script>
   </body>
 </html>
