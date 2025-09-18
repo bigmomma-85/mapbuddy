@@ -25,6 +25,7 @@
     .ok{color:#0a7f23; font-weight:600;}
     .drop{border:2px dashed #cfd6e4; border-radius:8px; height:72px; display:flex; align-items:center; justify-content:center; color:#556; background:#fafbff}
     .stack{display:grid; gap:10px;}
+    a { color: #0b72ff; }
   </style>
 </head>
 <body>
@@ -76,10 +77,12 @@
         </div>
       </div>
 
+      <!-- Google Maps link lives here -->
+      <div id="singleMaps" class="muted"></div>
       <div id="singleStatus" class="muted"></div>
     </div>
 
-    <!-- Bulk -->
+    <!-- Bulk (unchanged logic; always returns .zip for any format) -->
     <div id="bulkPane" class="stack" style="display:none">
       <div class="row">
         <div>
@@ -133,25 +136,16 @@ WP0400
 <script>
   // -------- tabs
   const tabSingle = document.getElementById('tabSingle');
-  const tabBulk = document.getElementById('tabBulk');
-  const singlePane = document.getElementById('singlePane');
-  const bulkPane = document.getElementById('bulkPane');
-
-  function show(which){
-    if (which === 'single'){ singlePane.style.display='grid'; bulkPane.style.display='none'; tabSingle.classList.add('active'); tabBulk.classList.remove('active'); }
-    else { singlePane.style.display='none'; bulkPane.style.display='grid'; tabBulk.classList.add('active'); tabSingle.classList.remove('active'); }
-  }
-  tabSingle.onclick = () => show('single');
-  tabBulk.onclick = () => show('bulk');
+  const tabBulk   = document.getElementById('tabBulk');
+  const singlePane= document.getElementById('singlePane');
+  const bulkPane  = document.getElementById('bulkPane');
+  const show = (w)=>{ if(w==='single'){singlePane.style.display='grid';bulkPane.style.display='none';tabSingle.classList.add('active');tabBulk.classList.remove('active');} else {singlePane.style.display='none';bulkPane.style.display='grid';tabBulk.classList.add('active');tabSingle.classList.remove('active');}};
+  tabSingle.onclick = ()=>show('single'); tabBulk.onclick = ()=>show('bulk');
 
   // -------- helpers
   async function downloadBlob(url, method, body, fallbackName='download.bin') {
     const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (!r.ok) {
-      let msg = `HTTP ${r.status}`;
-      try { const e = await r.json(); if (e?.error) msg = e.error; } catch {}
-      throw new Error(msg);
-    }
+    if (!r.ok) { let msg=`HTTP ${r.status}`; try{const e=await r.json(); if(e?.error) msg=e.error;}catch{} throw new Error(msg); }
     const blob = await r.blob();
     const cd = r.headers.get('Content-Disposition') || '';
     const m = cd.match(/filename="?([^"]+)"?/i);
@@ -162,12 +156,10 @@ WP0400
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(a.href);
   }
-
   function parseCsvText(text){
     const rows = [];
     text.split(/\r?\n/).forEach(line => {
-      const t = line.trim();
-      if (!t) return;
+      const t = line.trim(); if (!t) return;
       const parts = t.split(',').map(s=>s.trim());
       if (parts.length === 1) rows.push({ assetId: parts[0] });
       else rows.push({ assetId: parts[0], dataset: parts[1] });
@@ -176,22 +168,45 @@ WP0400
   }
 
   // -------- Single
-  const singleAsset = document.getElementById('singleAsset');
+  const singleAsset   = document.getElementById('singleAsset');
   const singleDataset = document.getElementById('singleDataset');
-  const singleFormat = document.getElementById('singleFormat');
-  const singleGo = document.getElementById('singleGo');
-  const singleStatus = document.getElementById('singleStatus');
+  const singleFormat  = document.getElementById('singleFormat');
+  const singleGo      = document.getElementById('singleGo');
+  const singleStatus  = document.getElementById('singleStatus');
+  const singleMaps    = document.getElementById('singleMaps');
+
+  async function locate(assetId, dataset){
+    const r = await fetch('/api/locate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ assetId, dataset })
+    });
+    if (!r.ok) { let m=`Locate failed (HTTP ${r.status})`; try{const e=await r.json(); if(e?.error) m=e.error;}catch{} throw new Error(m); }
+    return r.json();
+  }
 
   singleGo.onclick = async () => {
     const assetId = singleAsset.value.trim();
     const dataset = singleDataset.value;
-    const format = singleFormat.value; // kml | geojson | shapefile
+    const format  = singleFormat.value; // kml | geojson | shapefile
     if (!assetId){ singleStatus.textContent = 'Please enter an Asset / BMP ID.'; return; }
 
     singleGo.disabled = true;
-    singleStatus.textContent = 'Working…';
+    singleStatus.textContent = 'Locating…';
+    singleMaps.textContent = '';
+
     try {
-      await downloadBlob('/api/convert', 'POST', { assetId, dataset, format }, `${assetId}.${format === 'shapefile' ? 'zip' : (format === 'geojson' ? 'geojson' : 'kml')}`);
+      // 1) Locate and show Google Maps link
+      const info = await locate(assetId, dataset);
+      if (info?.googleMapsUrl && info?.centroid){
+        const { lat, lng } = info.centroid;
+        singleMaps.innerHTML = `<a href="${info.googleMapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a> · <span class="muted">lat ${lat.toFixed(6)}, lng ${lng.toFixed(6)}</span>`;
+      }
+
+      // 2) Convert / download
+      singleStatus.textContent = 'Converting…';
+      const fallback = format === 'shapefile' ? `${assetId}.zip` : (format === 'geojson' ? `${assetId}.geojson` : `${assetId}.kml`);
+      await downloadBlob('/api/convert', 'POST', { assetId, dataset, format }, fallback);
       singleStatus.innerHTML = '<span class="ok">Done.</span>';
     } catch(e){
       singleStatus.textContent = e.message || 'Error';
@@ -200,49 +215,32 @@ WP0400
     }
   };
 
-  // -------- Bulk
+  // -------- Bulk (unchanged)
   const bulkText = document.getElementById('bulkText');
   const bulkDefaultDataset = document.getElementById('bulkDefaultDataset');
   const bulkFormat = document.getElementById('bulkFormat');
   const bulkGo = document.getElementById('bulkGo');
   const bulkStatus = document.getElementById('bulkStatus');
 
-  // drag/drop CSV
   const drop = document.getElementById('drop');
   const file = document.getElementById('file');
   drop.onclick = () => file.click();
   drop.ondragover = (e)=>{ e.preventDefault(); drop.style.background = '#eef4ff' };
   drop.ondragleave = ()=>{ drop.style.background = '#fafbff' };
-  drop.ondrop = async (e)=>{
-    e.preventDefault(); drop.style.background = '#fafbff';
-    const f = e.dataTransfer.files[0]; if (!f) return;
-    const text = await f.text();
-    bulkText.value = text;
-  };
-  file.onchange = async () => {
-    const f = file.files[0]; if (!f) return;
-    const text = await f.text();
-    bulkText.value = text;
-    file.value = '';
-  };
+  drop.ondrop = async (e)=>{ e.preventDefault(); drop.style.background='#fafbff'; const f=e.dataTransfer.files[0]; if(!f)return; const t=await f.text(); bulkText.value=t; };
+  file.onchange = async ()=>{ const f=file.files[0]; if(!f)return; const t=await f.text(); bulkText.value=t; file.value=''; };
 
   bulkGo.onclick = async () => {
-    bulkGo.disabled = true;
-    bulkStatus.textContent = 'Building…';
-
+    bulkGo.disabled = true; bulkStatus.textContent = 'Building…';
     try {
       const items = parseCsvText(bulkText.value);
-      if (!items.length){ bulkStatus.textContent = 'No rows found.'; bulkGo.disabled = false; return; }
+      if (!items.length){ bulkStatus.textContent='No rows found.'; bulkGo.disabled=false; return; }
       const defaultDataset = bulkDefaultDataset.value;
-      const format = bulkFormat.value; // kml | geojson | shapefile
-
+      const format = bulkFormat.value;
       await downloadBlob('/api/bulk', 'POST', { items, defaultDataset, format }, `mapbuddy_${format}.zip`);
       bulkStatus.innerHTML = '<span class="ok">Done.</span>';
-    } catch(e){
-      bulkStatus.textContent = e.message || 'Error';
-    } finally {
-      bulkGo.disabled = false;
-    }
+    } catch(e){ bulkStatus.textContent = e.message || 'Error'; }
+    finally { bulkGo.disabled = false; }
   };
 </script>
 </body>
