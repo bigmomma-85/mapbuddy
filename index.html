@@ -3,212 +3,285 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>StormKML — Asset → KML Converter</title>
+    <title>MapBuddy — Single & Bulk KML / Shapefile</title>
     <style>
-      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7fb;margin:0;padding:24px}
-      .card{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e9ecf2;border-radius:12px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.03)}
+      :root { --c:#0b72ff; }
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7fb;margin:0;padding:24px;}
+      .card{max-width:900px;margin:0 auto;background:#fff;border:1px solid #e9ecf2;border-radius:12px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.03);}
       h1{margin:0 0 8px;font-size:28px} p{margin:0 0 16px;color:#445}
       label{display:block;font-size:14px;color:#334;margin:12px 0 6px}
-      input,select,button{width:100%;padding:12px;font-size:16px;border:1px solid #cfd6e4;border-radius:8px}
-      button{background:#0b72ff;color:#fff;border:none;margin-top:16px;cursor:pointer}
+      input,select,button,textarea{width:100%;padding:12px;font-size:16px;border:1px solid #cfd6e4;border-radius:8px;background:#fff}
+      textarea{min-height:110px}
+      button{background:var(--c);color:#fff;border:none;margin-top:12px;cursor:pointer}
+      button.secondary{background:#eef4ff;color:#184}
       button:disabled{background:#8fb6ff;cursor:not-allowed}
       small{color:#667}
       .row{display:grid;grid-template-columns:1fr;gap:12px}
-      @media (min-width:720px){.row{grid-template-columns:2fr 1fr}}
-      #status{margin-top:12px;min-height:20px;color:#222}
-      #mapsLink{margin-top:10px}
+      @media (min-width:820px){.row{grid-template-columns:2fr 1fr 1fr}}
+      .tabs{display:flex;gap:8px;margin:12px 0}
+      .tab{padding:8px 12px;border:1px solid #cfd6e4;border-radius:999px;background:#fff;cursor:pointer}
+      .tab.active{background:#0b72ff;color:#fff;border-color:#0b72ff}
+      .hide{display:none}
+      .hint{color:#667;margin-top:4px}
+      #status{margin-top:10px;min-height:20px}
+      .drop{border:1px dashed #cfd6e4;border-radius:8px;padding:12px;text-align:center;background:#fafcff}
     </style>
   </head>
   <body>
     <div class="card">
-      <h1>StormKML — Asset → KML Converter</h1>
-      <p>Enter an Asset / BMP ID, select a dataset, and download a KML generated from ArcGIS GeoJSON.</p>
+      <h1>MapBuddy — Asset → KML / GeoJSON / Shapefile</h1>
+      <p>Fast one-offs or bulk lists. Converts ArcGIS features to KML, GeoJSON or zipped Shapefile via Mapshaper.</p>
 
-      <div class="row">
-        <div>
-          <label>Asset / BMP ID</label>
-          <input id="asset" placeholder="e.g., WP0399, 1373DP, 210049UT, LOD_12345" />
-        </div>
-        <div>
-          <label>Dataset</label>
-          <select id="dataset">
-            <optgroup label="Fairfax">
-              <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-            </optgroup>
-            <optgroup label="MDOT SHA">
-              <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
-              <option value="mdsha_tmdl_any">MDOT SHA — TMDL (Auto-detect)</option>
-              <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures</option>
-              <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
-              <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
-              <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
-              <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
-              <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
-            </optgroup>
-          </select>
-        </div>
+      <div class="tabs">
+        <div class="tab active" id="tabSingle">Single</div>
+        <div class="tab" id="tabBulk">Bulk</div>
       </div>
 
-      <small>Note: Some MDOT SHA layers may require VPN. Browser tries direct ArcGIS first; server converts to KML.</small>
+      <!-- SINGLE -->
+      <div id="singlePanel">
+        <div class="row">
+          <div>
+            <label>Asset / BMP ID</label>
+            <input id="asset" placeholder="e.g., WP0399, 210049UT, LOD_12345" />
+            <div class="hint">Auto-detects dataset from the ID (WP→Fairfax, LOD_→Landscape, *UT/*TR/*SR/*OF/*PR→TMDL).</div>
+          </div>
+          <div>
+            <label>Dataset</label>
+            <select id="dataset">
+              <optgroup label="Fairfax">
+                <option value="fairfax_bmps">Stormwater Facilities</option>
+              </optgroup>
+              <optgroup label="MDOT SHA">
+                <option value="mdsha_landscape">Managed Landscape</option>
+                <option value="mdsha_tmdl_any">TMDL (Auto-detect)</option>
+                <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures</option>
+                <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
+                <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
+                <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
+                <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
+                <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label>Format</label>
+            <select id="formatSingle">
+              <option value="kml">KML</option>
+              <option value="geojson">GeoJSON</option>
+              <option value="shapefile">Shapefile (.zip)</option>
+            </select>
+          </div>
+        </div>
+        <button id="go">Download</button>
+        <div id="status"></div>
+        <div id="mapsLink"></div>
+        <small class="hint">Note: Some MDOT SHA services may need VPN.</small>
+      </div>
 
-      <button id="go">Get KML</button>
-      <div id="status"></div>
-      <div id="mapsLink"></div>
+      <!-- BULK -->
+      <div id="bulkPanel" class="hide">
+        <div class="row" style="grid-template-columns:2fr 1fr;">
+          <div>
+            <label>Paste CSV rows <small>(header optional; columns: assetId,dataset)</small></label>
+            <textarea id="csv" placeholder="assetId,dataset
+WP0399,fairfax_bmps
+210049UT,mdsha_tmdl_any
+LOD_12345,mdsha_landscape"></textarea>
+            <div class="hint">Leave <code>dataset</code> empty to auto-detect from ID.</div>
+          </div>
+          <div>
+            <label>Upload CSV file</label>
+            <div class="drop" id="drop">Drop CSV here or click to choose</div>
+            <input type="file" id="file" accept=".csv,text/csv" class="hide" />
+            <label style="margin-top:12px">Format</label>
+            <select id="formatBulk">
+              <option value="kml">KML</option>
+              <option value="geojson">GeoJSON</option>
+              <option value="shapefile">Shapefile (.zip)</option>
+            </select>
+            <button id="bulkGo">Download</button>
+          </div>
+        </div>
+        <div id="bulkStatus"></div>
+      </div>
+
+      <small class="hint">MapBuddy saves your last choices locally.</small>
     </div>
 
     <script>
+      // --- tabs ---
+      const tabSingle = document.getElementById('tabSingle');
+      const tabBulk   = document.getElementById('tabBulk');
+      const singlePanel = document.getElementById('singlePanel');
+      const bulkPanel   = document.getElementById('bulkPanel');
+      tabSingle.onclick = () => { tabSingle.classList.add('active'); tabBulk.classList.remove('active'); singlePanel.classList.remove('hide'); bulkPanel.classList.add('hide'); };
+      tabBulk.onclick   = () => { tabBulk.classList.add('active'); tabSingle.classList.remove('active'); bulkPanel.classList.remove('hide'); singlePanel.classList.add('hide'); };
+
+      // --- single references ---
       const btn = document.getElementById('go');
       const statusEl = document.getElementById('status');
       const mapsLinkEl = document.getElementById('mapsLink');
       const assetEl = document.getElementById('asset');
       const datasetEl = document.getElementById('dataset');
+      const fmtSingleEl = document.getElementById('formatSingle');
 
-      // client-side mirror (browser-first fetch)
-      const CLIENT_DATASETS = {
-        fairfax_bmps: {
-          base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
-          idFields: ["FACILITY_ID"],
-        },
-        mdsha_landscape: {
-          base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
-          idFields: ["LOD_ID"],
-        },
-        mdsha_tmdl_structures: {
-          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0",
-          idFields: ["SWM_FAC_NO","NAME","PROJECT_ID"],
-        },
-        mdsha_tmdl_retrofits: {
-          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1",
-          idFields: ["SWM_FAC_NO","NAME","PROJECT_ID"],
-        },
-        mdsha_tmdl_tree_plantings: {
-          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2",
-          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
-        },
-        mdsha_tmdl_pavement_removals: {
-          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3",
-          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
-        },
-        mdsha_tmdl_stream_restorations: {
-          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4",
-          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
-        },
-        mdsha_tmdl_outfall_stabilizations: {
-          base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
-          idFields: ["STRU_ID","NAME","PROJECT_ID","ASSET_ID"],
-        }
-      };
+      // --- bulk references ---
+      const csvEl = document.getElementById('csv');
+      const bulkBtn = document.getElementById('bulkGo');
+      const bulkStatus = document.getElementById('bulkStatus');
+      const drop = document.getElementById('drop');
+      const fileInput = document.getElementById('file');
+      const fmtBulkEl = document.getElementById('formatBulk');
 
-      function buildQueryUrl(base, field, value) {
-        const where = encodeURIComponent(`${field}='${value}'`);
-        return `${base}/query?where=${where}&outFields=*&returnGeometry=true&outSR=4326&f=geojson`;
-      }
-
-      async function browserFetchGeoJSON(asset, dataset) {
-        const keys = (dataset === 'mdsha_tmdl_any')
-          ? [
-              'mdsha_tmdl_structures',
-              'mdsha_tmdl_retrofits',
-              'mdsha_tmdl_tree_plantings',
-              'mdsha_tmdl_pavement_removals',
-              'mdsha_tmdl_stream_restorations',
-              'mdsha_tmdl_outfall_stabilizations'
-            ]
-          : [dataset];
-
-        for (const key of keys) {
-          const cfg = CLIENT_DATASETS[key];
-          if (!cfg) continue;
-          for (const f of cfg.idFields) {
-            try {
-              const url = buildQueryUrl(cfg.base, f, asset);
-              const r = await fetch(url, { credentials: 'include' });
-              if (r.ok) {
-                const data = await r.json();
-                if (data?.features?.length) {
-                  return { type: "FeatureCollection", features: [data.features[0]] };
-                }
-              }
-            } catch {}
-          }
-        }
+      // --- helpers ---
+      function guessDatasetFromId(id) {
+        if (!id) return null;
+        const s = id.trim().toUpperCase();
+        if (/^WP\d{3,}$/.test(s)) return 'fairfax_bmps';
+        if (s.startsWith('LOD_')) return 'mdsha_landscape';
+        if (/(UT|TR|SR|OF|PR)\s*$/.test(s)) return 'mdsha_tmdl_any';
         return null;
       }
+      assetEl.addEventListener('blur', () => {
+        const g = guessDatasetFromId(assetEl.value);
+        if (g) datasetEl.value = g;
+      });
 
-      async function locate(asset, dataset, geojson) {
-        const r = await fetch('/api/locate', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ assetId: asset, dataset, geojson })
-        });
-        if (!r.ok) {
-          let msg = `Locate failed (HTTP ${r.status})`;
-          try { const err = await r.json(); if (err?.error) msg = err.error; } catch {}
-          throw new Error(msg);
-        }
-        return r.json();
+      // persist
+      (function restore() {
+        try {
+          const last = JSON.parse(localStorage.getItem('mapbuddy:last') || '{}');
+          if (last.asset) assetEl.value = last.asset;
+          if (last.dataset) datasetEl.value = last.dataset;
+          if (last.formatSingle) fmtSingleEl.value = last.formatSingle;
+          if (last.tab === 'bulk') tabBulk.onclick();
+        } catch {}
+      })();
+      function saveLast(extra={}) {
+        const obj = {
+          asset: assetEl.value, dataset: datasetEl.value,
+          formatSingle: fmtSingleEl.value,
+          tab: document.getElementById('bulkPanel').classList.contains('hide') ? 'single' : 'bulk',
+          ...extra
+        };
+        try { localStorage.setItem('mapbuddy:last', JSON.stringify(obj)); } catch {}
       }
 
-      async function downloadKml(asset, dataset, geojson) {
-        const resp = await fetch('/api/convert', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ assetId: asset, dataset, geojson })
-        });
-
-        if (!resp.ok) {
-          let msg = `Request failed (HTTP ${resp.status})`;
-          try {
-            const err = await resp.json();
-            if (err?.error) msg = err.error;
-          } catch {
-            try { msg += ' — ' + (await resp.text()).slice(0,160); } catch {}
-          }
-          throw new Error(msg);
-        }
-
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = asset + '.kml';
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
+      // --- locate for maps link (optional) ---
+      async function locate(asset, dataset) {
+        try {
+          const r = await fetch('/api/locate', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ assetId: asset, dataset })
+          });
+          if (!r.ok) return null;
+          return await r.json();
+        } catch { return null; }
       }
 
-      async function handleClick() {
+      async function downloadSingle() {
         const asset = assetEl.value.trim();
         const dataset = datasetEl.value;
-        if (!asset) { statusEl.textContent = 'Please enter an Asset / BMP ID.'; return; }
-
-        btn.disabled = true;
-        statusEl.textContent = 'Searching…';
-        mapsLinkEl.innerHTML = '';
+        const format = fmtSingleEl.value;
+        if (!asset) { statusEl.textContent = 'Please enter an ID'; return; }
+        btn.disabled = true; statusEl.textContent = 'Locating…'; mapsLinkEl.innerHTML = '';
+        saveLast();
 
         try {
-          // 1) Browser-first fetch from ArcGIS
-          const fc = await browserFetchGeoJSON(asset, dataset);
-
-          // 2) Get centroid + GMaps (works with browser-fetched or server-fetched)
-          const info = await locate(asset, dataset, fc || undefined);
-          if (info?.googleMapsUrl && info?.centroid) {
-            mapsLinkEl.innerHTML =
-              `<a href="${info.googleMapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>` +
-              ` &middot; <small>lat ${info.centroid.lat.toFixed(6)}, lng ${info.centroid.lng.toFixed(6)}</small>`;
+          const info = await locate(asset, dataset);
+          if (info?.googleMapsUrl) {
+            mapsLinkEl.innerHTML = `<a href="${info.googleMapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>`;
           }
+        } catch {}
 
-          // 3) Convert to KML (server will use our GeoJSON if present, else it will fetch)
-          statusEl.textContent = 'Converting…';
-          await downloadKml(asset, dataset, fc || undefined);
-          statusEl.textContent = 'KML downloaded.';
-        } catch (e) {
-          statusEl.textContent = e.message || 'Error';
-        } finally {
-          btn.disabled = false;
+        statusEl.textContent = 'Converting…';
+        const resp = await fetch('/api/convert', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ assetId: asset, dataset, format })
+        });
+        if (!resp.ok) {
+          let msg = `Conversion failed (HTTP ${resp.status})`;
+          try { const j = await resp.json(); if (j?.error) msg = j.error + (j.details ? ' — '+j.details : ''); } catch {}
+          statusEl.textContent = msg; btn.disabled = false; return;
         }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const ext = format==='kml'?'kml':(format==='geojson'?'geojson':'zip');
+        const a = document.createElement('a'); a.href = url; a.download = `${asset}.${ext}`; a.click();
+        URL.revokeObjectURL(url);
+        statusEl.textContent = 'Done.';
+      }
+      btn.addEventListener('click', downloadSingle);
+      assetEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter') downloadSingle(); });
+
+      // ---- bulk upload ----
+      function parseCsv(txt) {
+        const rows = txt.split(/\r?\n/).map(r=>r.trim()).filter(Boolean);
+        if (!rows.length) return [];
+        let start = 0;
+        let header = rows[0].split(',').map(s=>s.trim().toLowerCase());
+        if (!(header.includes('assetid') || header.includes('dataset'))) {
+          header = ['assetid','dataset'];
+        } else {
+          start = 1;
+        }
+        const ai = header.indexOf('assetid');
+        const di = header.indexOf('dataset');
+        const items = [];
+        for (let i=start;i<rows.length;i++){
+          const cols = rows[i].split(',').map(s=>s.trim());
+          const assetId = cols[ai] || cols[0] || '';
+          const dataset = di>=0 ? cols[di] : '';
+          if (assetId) items.push({ assetId, dataset });
+        }
+        return items;
       }
 
-      document.getElementById('go').addEventListener('click', handleClick);
-      document.getElementById('asset').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleClick(); });
+      drop.addEventListener('click', ()=> fileInput.click());
+      drop.addEventListener('dragover', (e)=>{ e.preventDefault(); drop.style.background='#f2f7ff'; });
+      drop.addEventListener('dragleave', ()=> drop.style.background='#fafcff');
+      drop.addEventListener('drop', (e)=>{
+        e.preventDefault(); drop.style.background='#fafcff';
+        const f = e.dataTransfer.files?.[0]; if (f) readFile(f);
+      });
+      fileInput.addEventListener('change', ()=>{ const f=fileInput.files?.[0]; if(f) readFile(f); });
+      function readFile(file){
+        const r = new FileReader();
+        r.onload = ()=>{ csvEl.value = String(r.result||''); };
+        r.readAsText(file);
+      }
+
+      async function runBulk(){
+        const items = parseCsv(csvEl.value);
+        if (!items.length) { bulkStatus.textContent='No rows found'; return; }
+        bulkBtn.disabled = true; bulkStatus.textContent = `Converting ${items.length}…`;
+        saveLast({tab:'bulk'});
+
+        const format = fmtBulkEl.value;
+        const resp = await fetch('/api/bulk',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ items, format })
+        });
+        if (!resp.ok){
+          let msg = `Bulk failed (HTTP ${resp.status})`;
+          try{ const j=await resp.json(); if(j?.error) msg = j.error + (j.details ? ' — '+j.details : ''); }catch{}
+          bulkStatus.textContent = msg; bulkBtn.disabled=false; return;
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const ts = new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,14);
+        const ext = format==='kml'?'kml':(format==='geojson'?'geojson':'zip');
+        const a = document.createElement('a'); a.href=url; a.download = `mapbuddy_bulk_${ts}.${ext}`; a.click();
+        URL.revokeObjectURL(url);
+
+        const missed = resp.headers.get('X-MapBuddy-Missed');
+        const ex = resp.headers.get('X-MapBuddy-Missed-Example');
+        bulkStatus.textContent = missed && Number(missed) > 0
+          ? `Done. ${missed} not found (example: ${ex || ''})`
+          : 'Done.';
+        bulkBtn.disabled = false;
+      }
+      bulkBtn.addEventListener('click', runBulk);
     </script>
   </body>
 </html>
