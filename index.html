@@ -2,478 +2,488 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MapBuddy — Asset → Map Files</title>
-
-  <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            mbBlue: "#2563eb",
-            mbGreen: "#059669",
+            mbBlue: '#2563eb',
+            mbGreen: '#059669'
           },
           boxShadow: {
-            card: "0 8px 30px rgba(2, 6, 23, 0.08)",
-          },
-        },
-      },
-    };
+            soft: '0 10px 30px rgba(0,0,0,0.06)'
+          }
+        }
+      }
+    }
   </script>
-
   <style>
-    /* Small helpers for focus + transitions */
-    .btn {
-      @apply inline-flex items-center justify-center rounded-xl px-4 py-2 font-semibold text-white
-             bg-gradient-to-r from-mbBlue via-blue-500 to-mbGreen shadow
-             hover:shadow-lg hover:brightness-105 active:scale-[.99]
-             disabled:opacity-50 disabled:cursor-not-allowed;
-    }
-    .btn-lg { @apply px-5 py-3 text-base; }
-    .btn-ghost {
-      @apply inline-flex items-center justify-center rounded-xl px-3 py-2 font-medium
-             text-slate-700 hover:bg-slate-100;
-    }
-    .pill {
-      @apply inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold
-             bg-white text-slate-700 border border-slate-200 shadow-sm;
-    }
-    .pill-active {
-      @apply text-white bg-gradient-to-r from-mbBlue via-blue-500 to-mbGreen border-0;
-    }
-    .card {
-      @apply bg-white rounded-2xl shadow-card border border-slate-100;
-    }
-    .label {
-      @apply block text-sm font-semibold text-slate-700 mb-1.5;
-    }
-    .input, .select {
-      @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5
-             text-slate-900 placeholder-slate-400
-             focus:outline-none focus:ring-2 focus:ring-mbBlue focus:border-transparent;
-    }
-    .hint { @apply text-sm text-slate-500; }
-    .note { @apply inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700; }
-    .dot { @apply w-2 h-2 rounded-full bg-slate-400; }
-    .dash {
-      @apply border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center
-             hover:border-mbBlue transition-colors cursor-pointer;
-    }
+    /* Smooth focus rings for keyboard users */
+    :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
   </style>
 </head>
+<body class="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900">
 
-<body class="min-h-screen bg-gradient-to-b from-slate-50 to-blue-50 text-slate-900">
   <!-- Header -->
-  <header class="bg-white/80 backdrop-blur border-b border-slate-200">
-    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+  <header class="w-full">
+    <div class="max-w-6xl mx-auto px-5 py-5 flex items-center gap-3">
       <div class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-lg bg-gradient-to-r from-mbBlue to-mbGreen grid place-items-center text-white font-bold">
-          <span class="text-lg">M</span>
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-r from-mbBlue to-mbGreen grid place-items-center shadow-soft">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" class="text-white">
+            <path d="M4 7.5L10 10.5V20L4 17V7.5Z M14 4L20 7V16.5L14 13.5V4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
         </div>
-        <span class="text-xl font-bold">MapBuddy</span>
+        <div class="font-semibold text-lg">MapBuddy</div>
       </div>
     </div>
   </header>
 
   <!-- Hero -->
-  <section class="mx-auto max-w-6xl px-4 pt-10 pb-4">
-    <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight">
-      Convert Assets to
-      <span class="bg-gradient-to-r from-mbBlue via-blue-500 to-mbGreen bg-clip-text text-transparent">
-        Map Files
-      </span>
-    </h1>
-    <p class="mt-4 text-lg text-slate-600">
-      Transform asset numbers into KML, GeoJSON, Shapefile. Single asset or bulk processing available.
-    </p>
-
-    <!-- Mode pills -->
-    <div class="mt-6 flex items-center gap-3">
-      <button id="btnSingleTab" class="pill pill-active" type="button">Single</button>
-      <button id="btnBulkTab" class="pill" type="button">Bulk</button>
+  <section class="w-full">
+    <div class="max-w-6xl mx-auto px-5 pt-4 pb-2">
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight">
+        Convert Assets to
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-mbBlue to-mbGreen">Map Files</span>
+      </h1>
+      <p class="mt-4 text-lg text-slate-600">
+        Transform asset numbers into KML, GeoJSON, Shapefile. Single asset or bulk processing available.
+      </p>
     </div>
   </section>
 
-  <!-- Single card -->
-  <main class="mx-auto max-w-6xl px-4 pb-16">
-    <section id="singleCard" class="card p-6 sm:p-8">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Asset -->
-        <div>
-          <label class="label">Asset / BMP ID</label>
-          <input id="singleAsset" class="input" placeholder="e.g., WP0399, 210049UT, LOD_12345" />
+  <!-- Mode Toggle -->
+  <section class="w-full">
+    <div class="max-w-6xl mx-auto px-5 pt-4">
+      <div class="inline-flex p-1 rounded-full bg-white shadow-soft border border-slate-200">
+        <button id="btnSingle"
+                class="px-5 py-2 rounded-full font-medium bg-gradient-to-r from-mbBlue to-mbGreen text-white transition"
+                aria-pressed="true">
+          Single
+        </button>
+        <button id="btnBulk"
+                class="px-5 py-2 rounded-full font-medium text-slate-700 hover:text-slate-900 transition"
+                aria-pressed="false">
+          Bulk
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Single Card -->
+  <main class="w-full">
+    <div class="max-w-6xl mx-auto px-5">
+      <div id="cardSingle" class="mt-6 bg-white rounded-2xl shadow-soft border border-slate-200 p-5 sm:p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <!-- Asset -->
+          <div>
+            <label class="block text-sm font-semibold mb-1">Asset / BMP ID</label>
+            <input id="singleAsset"
+                   type="text"
+                   placeholder="e.g., WP0399, 210049UT, LOD_12345"
+                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:ring-2 focus:ring-mbBlue focus:border-transparent" />
+          </div>
+
+          <!-- Dataset -->
+          <div>
+            <label class="block text-sm font-semibold mb-1">Dataset</label>
+            <select id="singleDataset"
+                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:ring-2 focus:ring-mbBlue focus:border-transparent">
+            </select>
+          </div>
+
+          <!-- Format -->
+          <div>
+            <label class="block text-sm font-semibold mb-1">Format</label>
+            <select id="singleFormat"
+                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:ring-2 focus:ring-mbBlue focus:border-transparent">
+              <option value="kml">KML</option>
+              <option value="geojson">GeoJSON</option>
+              <option value="shapefile">Shapefile (.zip)</option>
+            </select>
+          </div>
         </div>
 
-        <!-- Dataset -->
-        <div>
-          <label class="label">Dataset</label>
-          <select id="singleDataset" class="select">
-            <!-- Fairfax -->
-            <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
+        <!-- Actions -->
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <button id="btnDownloadSingle"
+                  class="rounded-full bg-gradient-to-r from-mbBlue to-mbGreen text-white px-5 py-2.5 font-medium shadow-soft hover:shadow-md transition">
+            Download
+          </button>
 
-            <!-- MDOT SHA / LOD -->
-            <option value="mdsha_lod">MDOT SHA — Managed Landscape (LOD_ID)</option>
+          <a id="linkGmaps"
+             href="#"
+             target="_blank"
+             class="text-mbBlue hover:underline flex items-center gap-1">
+            Open in Google Maps →
+          </a>
 
-            <optgroup label="MDOT SHA — TMDL">
-              <option value="mdsha_tmdl_scs">TMDL — Stormwater Control Structures</option>
-              <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
-              <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
-              <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
-              <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
-              <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
-            </optgroup>
-          </select>
+          <button id="btnCopyLink"
+                  class="rounded-full bg-gradient-to-r from-mbBlue to-mbGreen text-white px-5 py-2.5 font-medium shadow-soft hover:shadow-md transition">
+            Copy link
+          </button>
+
+          <div id="singleStatus" class="text-slate-500">Done.</div>
         </div>
 
-        <!-- Format (DROPDOWN) -->
-        <div>
-          <label class="label">Format</label>
-          <select id="singleFormat" class="select">
-            <option value="kml">KML</option>
-            <option value="geojson">GeoJSON</option>
-            <option value="shapefile">Shapefile (.zip)</option>
-          </select>
+        <div class="mt-4 text-slate-500 text-sm flex items-center gap-2">
+          <span class="px-2 py-1 rounded-full bg-slate-100 border border-slate-200">Note</span>
+          MDOT SHA layers may require VPN.
         </div>
       </div>
 
-      <!-- Actions -->
-      <div class="mt-6 flex flex-wrap items-center gap-3">
-        <button id="btnSingleDownload" class="btn btn-lg" type="button">Download</button>
+      <!-- Bulk Card -->
+      <div id="cardBulk" class="hidden mt-6 bg-white rounded-2xl shadow-soft border border-slate-200 p-5 sm:p-6">
+        <h2 class="text-xl font-bold mb-4">Bulk Asset Conversion</h2>
 
-        <a id="aOpenGMaps" class="btn-ghost" href="#" target="_blank" rel="noopener">
-          Open in Google Maps →
-        </a>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-semibold mb-1">Dataset</label>
+            <select id="bulkDataset"
+                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:ring-2 focus:ring-mbBlue focus:border-transparent">
+            </select>
 
-        <button id="btnCopyGMaps" class="btn btn-lg" type="button">Copy link</button>
-
-        <span id="singleStatus" class="hint">Done.</span>
-      </div>
-
-      <div class="mt-4">
-        <span class="note"><span class="dot"></span> MDOT SHA layers may require VPN.</span>
-      </div>
-    </section>
-
-    <!-- Bulk card -->
-    <section id="bulkCard" class="card p-6 sm:p-8 mt-8 hidden">
-      <h2 class="sr-only">Bulk Asset Conversion</h2>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <!-- Left: dataset + dropzone + csv rules -->
-        <div>
-          <label class="label">Dataset</label>
-          <select id="bulkDataset" class="select mb-6">
-            <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-            <option value="mdsha_lod">MDOT SHA — Managed Landscape (LOD_ID)</option>
-            <optgroup label="MDOT SHA — TMDL">
-              <option value="mdsha_tmdl_scs">TMDL — Stormwater Control Structures</option>
-              <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
-              <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
-              <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
-              <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
-              <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
-            </optgroup>
-          </select>
-
-          <!-- Dropzone -->
-          <label class="label">Upload CSV</label>
-          <div id="dropZone" class="dash">
-            <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-gradient-to-r from-mbBlue to-mbGreen grid place-items-center text-white">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-              </svg>
-            </div>
-            <p class="font-semibold">Drop your CSV file here</p>
-            <p class="hint">or click to browse</p>
-            <div class="mt-4">
-              <label class="btn btn-lg cursor-pointer">
-                <input id="bulkFile" type="file" accept=".csv" class="hidden" />
+            <!-- Drop zone -->
+            <div id="dropZone"
+                 class="mt-4 border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-mbBlue transition">
+              <div class="w-14 h-14 mx-auto rounded-full bg-gradient-to-r from-mbBlue to-mbGreen grid place-items-center text-white mb-3 shadow-soft">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 16V8M12 8l-3 3m3-3l3 3M5 20h14a2 2 0 0 0 2-2v-3.5a2 2 0 0 0-2-2h-1.5A5.5 5.5 0 0 0 6 12.5H4a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2Z" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="font-semibold">Drop your CSV file here</div>
+              <div class="text-slate-500">or click to browse</div>
+              <input id="fileInput" type="file" accept=".csv" class="hidden" />
+              <button id="btnChooseCsv"
+                      class="mt-4 rounded-full bg-gradient-to-r from-mbBlue to-mbGreen text-white px-4 py-2 font-medium shadow-soft hover:shadow-md transition">
                 Choose CSV File
-              </label>
+              </button>
+              <div id="csvName" class="mt-2 text-sm text-slate-500"></div>
+            </div>
+
+            <!-- CSV Help -->
+            <div class="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div class="font-semibold text-blue-900 mb-2">CSV Format Requirements:</div>
+              <ul class="text-sm text-blue-800 list-disc pl-5 space-y-1">
+                <li>First column: Asset numbers</li>
+                <li>Header row optional</li>
+                <li>Up to 1000 assets per file</li>
+                <li>Optional second column: dataset key</li>
+              </ul>
             </div>
           </div>
 
-          <!-- CSV rules -->
-          <div class="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-            <p class="font-semibold text-blue-900 mb-2">CSV Format Requirements:</p>
-            <ul class="text-sm text-blue-800 space-y-1">
-              <li>• First column: Asset numbers</li>
-              <li>• Header row optional</li>
-              <li>• Up to 1000 assets per file</li>
-              <li>• Optional second column: dataset key</li>
-            </ul>
-          </div>
-        </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Output Format</label>
+            <select id="bulkFormat"
+                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 focus:ring-2 focus:ring-mbBlue focus:border-transparent">
+              <option value="kmlzip">KML (.zip)</option>
+              <option value="geojsonzip">GeoJSON (.zip)</option>
+              <option value="shapefile">Shapefile (.zip)</option>
+            </select>
 
-        <!-- Right: format dropdown + gmaps info + action -->
-        <div>
-          <label class="label">Output Format</label>
-          <select id="bulkFormat" class="select">
-            <option value="kmlzip">KML (.zip)</option>
-            <option value="geojsonzip">GeoJSON (.zip)</option>
-            <option value="shapefile">Shapefile (.zip)</option>
-          </select>
-
-          <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p class="font-semibold text-slate-900 mb-1">Google Maps Links</p>
-            <p class="hint">Direct map links (CSV) — included with bulk.</p>
-          </div>
-
-          <div class="mt-6">
-            <button id="btnBulkProcess" class="btn btn-lg" type="button">Process Bulk Conversion</button>
-            <span id="bulkStatus" class="ml-3 hint align-middle"></span>
+            <div class="mt-6">
+              <button id="btnProcessBulk"
+                      class="rounded-full bg-gradient-to-r from-mbBlue to-mbGreen text-white px-6 py-3 font-semibold shadow-soft hover:shadow-md transition">
+                Process Bulk Conversion
+              </button>
+              <div id="bulkStatus" class="mt-3 text-slate-500"></div>
+            </div>
           </div>
         </div>
       </div>
-    </section>
+
+      <!-- Footer -->
+      <footer class="py-10 text-center text-slate-500">
+        © 2025 MapBuddy · Simple, reliable asset-to-map conversion.
+      </footer>
+    </div>
   </main>
 
-  <!-- Footer -->
-  <footer class="py-10 text-center text-slate-500">
-    © 2025 MapBuddy · Simple, reliable asset-to-map conversion.
-  </footer>
-
   <script>
-    // -------------------------------
-    // Tab switching
-    // -------------------------------
-    const singleTabBtn = document.getElementById("btnSingleTab");
-    const bulkTabBtn   = document.getElementById("btnBulkTab");
-    const singleCard   = document.getElementById("singleCard");
-    const bulkCard     = document.getElementById("bulkCard");
+    // ---------- Dataset options (value = API dataset key) ----------
+    const DATASETS = [
+      { value: 'fairfax_bmps', label: 'Fairfax — Stormwater Facilities (FACILITY_ID)' },
+      { value: 'mdsha_managed_landscape', label: 'MDOT SHA — Managed Landscape (LOD_ID)' },
+
+      // TMDL families (MD SHA)
+      { value: 'mdsha_tmdl_scs', label: 'TMDL — Stormwater Control Structures' },
+      { value: 'mdsha_tmdl_ret', label: 'TMDL — Retrofits' },
+      { value: 'mdsha_tmdl_tree_plantings', label: 'TMDL — Tree Plantings' },
+      { value: 'mdsha_tmdl_pave_removal', label: 'TMDL — Pavement Removals' },
+      { value: 'mdsha_tmdl_stream_restoration', label: 'TMDL — Stream Restorations' },
+      { value: 'mdsha_tmdl_outfall_stabilizations', label: 'TMDL — Outfall Stabilizations' },
+    ];
+
+    // ---------- Populate dropdowns ----------
+    const singleDataset = document.getElementById('singleDataset');
+    const bulkDataset   = document.getElementById('bulkDataset');
+    function populateDatasets() {
+      [singleDataset, bulkDataset].forEach(sel => {
+        sel.innerHTML = '';
+        DATASETS.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = o.label;
+          sel.appendChild(opt);
+        });
+      });
+    }
+    populateDatasets();
+
+    // ---------- Mode toggle ----------
+    const btnSingle = document.getElementById('btnSingle');
+    const btnBulk   = document.getElementById('btnBulk');
+    const cardSingle= document.getElementById('cardSingle');
+    const cardBulk  = document.getElementById('cardBulk');
 
     function setMode(mode) {
-      const singleActive = mode === "single";
-      singleCard.classList.toggle("hidden", !singleActive);
-      bulkCard.classList.toggle("hidden", singleActive);
-      singleTabBtn.classList.toggle("pill-active", singleActive);
-      bulkTabBtn.classList.toggle("pill-active", !singleActive);
+      const activeClasses   = ['bg-gradient-to-r','from-mbBlue','to-mbGreen','text-white'];
+      const inactiveClasses = ['text-slate-700','hover:text-slate-900'];
+
+      if (mode === 'single') {
+        cardSingle.classList.remove('hidden');
+        cardBulk.classList.add('hidden');
+        btnSingle.setAttribute('aria-pressed','true');
+        btnBulk.setAttribute('aria-pressed','false');
+
+        btnSingle.classList.add(...activeClasses);
+        btnSingle.classList.remove(...inactiveClasses);
+        btnBulk.classList.remove(...activeClasses);
+        btnBulk.classList.add(...inactiveClasses);
+      } else {
+        cardSingle.classList.add('hidden');
+        cardBulk.classList.remove('hidden');
+        btnSingle.setAttribute('aria-pressed','false');
+        btnBulk.setAttribute('aria-pressed','true');
+
+        btnBulk.classList.add(...activeClasses);
+        btnBulk.classList.remove(...inactiveClasses);
+        btnSingle.classList.remove(...activeClasses);
+        btnSingle.classList.add(...inactiveClasses);
+      }
     }
-    singleTabBtn.addEventListener("click", () => setMode("single"));
-    bulkTabBtn.addEventListener("click", () => setMode("bulk"));
+    btnSingle.addEventListener('click', () => setMode('single'));
+    btnBulk.addEventListener('click',   () => setMode('bulk'));
 
-    // -------------------------------
-    // Elements (Single)
-    // -------------------------------
-    const singleAsset   = document.getElementById("singleAsset");
-    const singleDataset = document.getElementById("singleDataset");
-    const singleFormat  = document.getElementById("singleFormat");
-    const btnSingleDownload = document.getElementById("btnSingleDownload");
-    const singleStatus  = document.getElementById("singleStatus");
-    const aOpenGMaps    = document.getElementById("aOpenGMaps");
-    const btnCopyGMaps  = document.getElementById("btnCopyGMaps");
+    // ---------- Single: Google Maps link helpers ----------
+    const singleAsset  = document.getElementById('singleAsset');
+    const linkGmaps    = document.getElementById('linkGmaps');
+    const singleStatus = document.getElementById('singleStatus');
 
-    let currentGMapsUrl = "";
-
-    // Helper: simple robust find in returned JSON for a Google Maps URL shape
-    function extractGMapsUrl(obj) {
-      const asText = JSON.stringify(obj);
-      const match = asText.match(/https?:\/\/www\.google\.com\/maps[^\s"']+/);
-      return match ? match[0] : "";
-    }
-
-    async function refreshGMapsLink() {
-      currentGMapsUrl = "";
-      aOpenGMaps.href = "#";
-      btnCopyGMaps.disabled = true;
-
-      const id = singleAsset.value.trim();
-      const ds = singleDataset.value;
-      if (!id) return;
-
+    async function getGoogleMapsUrl(assetId, dataset) {
       try {
-        // Your repo already has api/locate.js; call it to get a link or coords
-        const res = await fetch(`/api/locate?id=${encodeURIComponent(id)}&dataset=${encodeURIComponent(ds)}`);
+        const res = await fetch('/api/locate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ assetId, dataset })
+        });
         if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          const url = data.googleMapsUrl || data.url || data.href || extractGMapsUrl(data);
-          if (url) {
-            currentGMapsUrl = url;
-            aOpenGMaps.href = url;
-            btnCopyGMaps.disabled = false;
+          const j = await res.json();
+          if (j && j.url) return j.url;
+          if (j && j.lat != null && j.lon != null) {
+            return `https://www.google.com/maps/search/?api=1&query=${j.lat},${j.lon}`;
           }
         }
-      } catch (_) { /* no-op */ }
+      } catch {}
+      // Fallback: generic search by asset ID
+      return `https://www.google.com/maps/search/?q=${encodeURIComponent(assetId)}`;
     }
 
-    singleAsset.addEventListener("input", refreshGMapsLink);
-    singleDataset.addEventListener("change", refreshGMapsLink);
+    async function refreshMapLink() {
+      const assetId = singleAsset.value.trim();
+      if (!assetId) return;
+      const dataset = singleDataset.value;
+      const url = await getGoogleMapsUrl(assetId, dataset);
+      linkGmaps.href = url;
+    }
+    singleAsset.addEventListener('input', refreshMapLink);
+    singleDataset.addEventListener('change', refreshMapLink);
 
-    btnCopyGMaps.addEventListener("click", async () => {
-      if (!currentGMapsUrl) return;
+    // ---------- Single: Download + Copy ----------
+    const singleFormat      = document.getElementById('singleFormat');
+    const btnDownloadSingle = document.getElementById('btnDownloadSingle');
+    const btnCopyLink       = document.getElementById('btnCopyLink');
+
+    function downloadBlob(blob, filename) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+
+    btnDownloadSingle.addEventListener('click', async () => {
+      const assetId = singleAsset.value.trim();
+      if (!assetId) { singleStatus.textContent = 'Enter an asset ID.'; return; }
+      const dataset = singleDataset.value;
+      const format  = singleFormat.value;
+
+      btnDownloadSingle.disabled = true;
+      singleStatus.textContent = 'Downloading…';
+
       try {
-        await navigator.clipboard.writeText(currentGMapsUrl);
-        singleStatus.textContent = "Link copied.";
-      } catch {
-        singleStatus.textContent = "Copy failed.";
-      }
-    });
-
-    // -------------------------------
-    // Single: Download
-    // -------------------------------
-    btnSingleDownload.addEventListener("click", async () => {
-      const id = singleAsset.value.trim();
-      const ds = singleDataset.value;
-      const fmt = singleFormat.value; // "kml" | "geojson" | "shapefile"
-      if (!id) {
-        singleStatus.textContent = "Enter an asset ID.";
-        return;
-      }
-      singleStatus.textContent = "Working…";
-
-      try {
-        const res = await fetch("/api/convert", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assetId: id, dataset: ds, format: fmt }),
+        const res = await fetch('/api/convert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assetId, dataset, format })
         });
 
         if (!res.ok) {
           const t = await res.text();
-          throw new Error(t || `HTTP ${res.status}`);
+          throw new Error(t || 'Request failed.');
         }
 
         const blob = await res.blob();
-        const cd = res.headers.get("content-disposition") || "";
-        // try to extract filename= from header; otherwise fallback
-        const m = cd.match(/filename="?([^"]+)"?/i);
-        const filename = m ? m[1] : `mapbuddy.${fmt === "kml" ? "kml" : fmt === "geojson" ? "geojson" : "zip"}`;
+        // Try to honor filename from header if present
+        const cd = res.headers.get('content-disposition') || '';
+        const m  = /filename="?([^"]+)"?/.exec(cd);
+        const filename = m ? m[1] : `mapbuddy.${format === 'geojson' ? 'geojson' : format === 'shapefile' ? 'zip' : 'kml'}`;
+        downloadBlob(blob, filename);
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-
-        singleStatus.textContent = "Done.";
+        singleStatus.textContent = 'Done.';
       } catch (err) {
-        singleStatus.textContent = `Error: ${err.message || err}`;
+        singleStatus.textContent = 'Error: ' + err.message;
+      } finally {
+        btnDownloadSingle.disabled = false;
+        refreshMapLink();
       }
     });
 
-    // -------------------------------
-    // Bulk
-    // -------------------------------
-    const bulkDataset  = document.getElementById("bulkDataset");
-    const bulkFormat   = document.getElementById("bulkFormat"); // "kmlzip" | "geojsonzip" | "shapefile"
-    const bulkFile     = document.getElementById("bulkFile");
-    const dropZone     = document.getElementById("dropZone");
-    const btnBulkProcess = document.getElementById("btnBulkProcess");
-    const bulkStatus   = document.getElementById("bulkStatus");
-
-    // Click-to-browse
-    dropZone.addEventListener("click", () => bulkFile.click());
-
-    // Drag & drop
-    ;["dragenter","dragover"].forEach(ev =>
-      dropZone.addEventListener(ev, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropZone.classList.add("border-mbBlue");
-      })
-    );
-    ;["dragleave","drop"].forEach(ev =>
-      dropZone.addEventListener(ev, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropZone.classList.remove("border-mbBlue");
-      })
-    );
-    dropZone.addEventListener("drop", e => {
-      const f = e.dataTransfer?.files?.[0];
-      if (f) bulkFile.files = e.dataTransfer.files;
+    btnCopyLink.addEventListener('click', async () => {
+      const assetId = singleAsset.value.trim();
+      if (!assetId) { singleStatus.textContent = 'Enter an asset ID.'; return; }
+      const dataset = singleDataset.value;
+      try {
+        const url = await getGoogleMapsUrl(assetId, dataset);
+        await navigator.clipboard.writeText(url);
+        singleStatus.textContent = 'Link copied.';
+      } catch (e) {
+        singleStatus.textContent = 'Could not copy link.';
+      }
     });
 
+    // ---------- Bulk: CSV handling + POST ----------
+    const dropZone      = document.getElementById('dropZone');
+    const fileInput     = document.getElementById('fileInput');
+    const btnChooseCsv  = document.getElementById('btnChooseCsv');
+    const csvName       = document.getElementById('csvName');
+    const bulkFormat    = document.getElementById('bulkFormat');
+    const btnProcessBulk= document.getElementById('btnProcessBulk');
+    const bulkStatus    = document.getElementById('bulkStatus');
+
+    let csvRows = null;
+
+    btnChooseCsv.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        handleCsvFile(fileInput.files[0]);
+      }
+    });
+
+    ;['dragenter','dragover'].forEach(evt => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        dropZone.classList.add('border-mbBlue');
+      });
+    });
+    ;['dragleave','drop'].forEach(evt => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        dropZone.classList.remove('border-mbBlue');
+      });
+    });
+    dropZone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer.files;
+      if (files && files[0]) handleCsvFile(files[0]);
+    });
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    function handleCsvFile(file) {
+      csvName.textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result;
+        csvRows = parseCsv(text);
+        bulkStatus.textContent = `${csvRows?.length || 0} row(s) ready.`;
+      };
+      reader.readAsText(file);
+    }
+
+    // Very small CSV parser: reads first two columns (assetId, datasetKey?)
     function parseCsv(text) {
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (lines.length === 0) return [];
-      // Detect header: if first row has non-alnum or contains comma > 1 etc.
-      // We’ll accept either:
-      //   assetId
-      //   assetId,dataset
-      //   OR header row then values
-      const maybeHeader = lines[0].toLowerCase();
-      const hasHeader = /asset|dataset/.test(maybeHeader);
-      const start = hasHeader ? 1 : 0;
-
-      const items = [];
-      for (let i = start; i < lines.length; i++) {
-        const parts = lines[i].split(",").map(s => s.trim()).filter(Boolean);
-        if (!parts[0]) continue;
-        const item = { assetId: parts[0] };
-        if (parts[1]) item.dataset = parts[1];
-        items.push(item);
-      }
-      return items;
+      return text
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(s => s.length)
+        .map(line => {
+          const parts = line.split(',').map(x => x.trim());
+          return parts;
+        });
     }
 
-    btnBulkProcess.addEventListener("click", async () => {
-      const file = bulkFile.files?.[0];
-      if (!file) {
-        bulkStatus.textContent = "Please choose a CSV file.";
+    btnProcessBulk.addEventListener('click', async () => {
+      if (!csvRows || !csvRows.length) {
+        bulkStatus.textContent = 'Please attach a CSV file first.';
         return;
       }
-      bulkStatus.textContent = "Parsing CSV…";
+
+      const defaultDataset = bulkDataset.value;
+      const format = bulkFormat.value; // "kmlzip" | "geojsonzip" | "shapefile"
+
+      // Build items (first col assetId, optional second col dataset)
+      const items = [];
+      const maybeHeader = csvRows[0][0]?.toLowerCase?.() || '';
+      const hasHeader = ['asset','assetid','bmp','id'].some(k => maybeHeader.includes(k));
+
+      const startIdx = hasHeader ? 1 : 0;
+      for (let i = startIdx; i < csvRows.length; i++) {
+        const row = csvRows[i];
+        if (!row || !row[0]) continue;
+        const assetId = String(row[0]).trim();
+        const dataset = row[1] ? String(row[1]).trim() : undefined;
+        items.push(dataset ? { assetId, dataset } : { assetId });
+      }
+
+      if (!items.length) {
+        bulkStatus.textContent = 'No valid rows found in CSV.';
+        return;
+      }
+
+      btnProcessBulk.disabled = true;
+      bulkStatus.textContent = 'Processing…';
 
       try {
-        const text = await file.text();
-        const items = parseCsv(text);
-        if (items.length === 0) {
-          bulkStatus.textContent = "No items found in CSV.";
-          return;
-        }
-
-        const payload = {
-          items,
-          defaultDataset: bulkDataset.value,
-          format: bulkFormat.value, // "kmlzip" | "geojsonzip" | "shapefile"
-        };
-
-        bulkStatus.textContent = "Processing…";
-        const res = await fetch("/api/bulk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        const res = await fetch('/api/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items, defaultDataset, format })
         });
-
         if (!res.ok) {
           const t = await res.text();
-          throw new Error(t || `HTTP ${res.status}`);
+          throw new Error(t || 'Request failed.');
         }
-
         const blob = await res.blob();
-        const cd = res.headers.get("content-disposition") || "";
-        const m = cd.match(/filename="?([^"]+)"?/i);
-        const filename = m ? m[1] : "mapbuddy_bulk.zip";
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-
-        bulkStatus.textContent = "Done. Google Maps CSV is included in the ZIP.";
+        const cd = res.headers.get('content-disposition') || '';
+        const m  = /filename="?([^"]+)"?/.exec(cd);
+        const filename = m ? m[1] : `mapbuddy_${format}.zip`;
+        downloadBlob(blob, filename);
+        bulkStatus.textContent = 'Done.';
       } catch (err) {
-        bulkStatus.textContent = `Error: ${err.message || err}`;
+        bulkStatus.textContent = 'Error: ' + err.message;
+      } finally {
+        btnProcessBulk.disabled = false;
       }
     });
 
-    // Initialize defaults
-    setMode("single");
-    // Preload a GMaps link if an ID is already filled (e.g., browser remembers)
-    refreshGMapsLink();
+    // ---------- Defaults ----------
+    singleDataset.value = 'fairfax_bmps';
+    bulkDataset.value   = 'fairfax_bmps';
+    refreshMapLink(); // sets initial link
   </script>
 </body>
 </html>
