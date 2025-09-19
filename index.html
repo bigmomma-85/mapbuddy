@@ -5,33 +5,30 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>MapBuddy — Asset → KML / GeoJSON / Shapefile</title>
 
-  <!-- Tailwind (CDN) -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
-          colors: {
-            mbBlue:  '#2563eb',
-            mbGreen: '#059669',
-            mbSlate: '#0f172a'
-          },
-          boxShadow: {
-            card: '0 10px 30px rgba(2,6,23,.06)'
-          }
+          colors: { mbBlue:'#2563eb', mbGreen:'#059669' },
+          boxShadow: { card:'0 10px 30px rgba(2,6,23,.06)' }
         }
       }
     }
   </script>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%232563eb' d='M6 10a4 4 0 0 1 4-4h4l8 3l8-3h4a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4h-4l-8-3l-8 3h-4a4 4 0 0 1-4-4z'/%3E%3Cpath fill='%23059669' d='M14 6v32l8-3V3zM34 6v32l-8-3V3z'/%3E%3C/svg%3E" />
   <style>
-    .pill { @apply inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm; }
-    .btn  { @apply inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold transition; }
-    .btn-primary { @apply bg-mbBlue text-white hover:bg-blue-600; }
-    .btn-ghost   { @apply bg-white text-mbBlue border border-blue-200 hover:border-blue-300; }
-    .btn-green   { @apply bg-mbGreen text-white hover:bg-emerald-600; }
-    .kbd { @apply px-2 py-0.5 rounded border text-xs text-slate-600 bg-slate-50; }
+    .btn{ @apply inline-flex items-center justify-center font-semibold transition rounded-2xl px-5 py-3; }
+    .btn-grad{ background:linear-gradient(90deg,#2563eb 0%,#059669 100%); color:#fff; }
+    .btn-grad:hover{ filter:brightness(1.06); }
+    .seg{ @apply inline-flex items-center gap-2 rounded-full px-4 py-2 border transition text-slate-600 bg-white; }
+    .seg-active{ @apply text-white border-transparent; background:linear-gradient(90deg,#2563eb 0%,#059669 100%); }
+    .seg:hover{ @apply border-slate-300; }
+    .kbd{ @apply px-2 py-0.5 rounded border text-xs text-slate-600 bg-slate-50; }
+    .card-radio{ @apply w-4 h-4 rounded-full border border-slate-300; }
+    .card-radio.on{ @apply border-transparent; background:linear-gradient(90deg,#2563eb 0%,#059669 100%); }
   </style>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%232563eb' d='M6 10a4 4 0 0 1 4-4h4l8 3l8-3h4a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4h-4l-8-3l-8 3h-4a4 4 0 0 1-4-4z'/%3E%3Cpath fill='%23059669' d='M14 6v32l8-3V3zM34 6v32l-8-3V3z'/%3E%3C/svg%3E" />
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
   <!-- Header -->
@@ -57,35 +54,32 @@
         Convert Assets to <span class="bg-clip-text text-transparent bg-gradient-to-r from-mbBlue to-mbGreen">Map Files</span>
       </h1>
       <p class="mt-4 text-lg text-slate-600 max-w-3xl">
-        Fast one-offs or bulk lists. Generate <strong>KML</strong>, <strong>GeoJSON</strong>, or zipped <strong>Shapefile</strong> from ArcGIS features.
-        Bulk downloads include a <code class="kbd">mapbuddy_links.csv</code> with Google Maps links.
+        Transform asset numbers into KML, GeoJSON, Shapefile. Single asset or bulk processing available.
       </p>
-    </div>
-  </section>
 
-  <!-- Mode toggle -->
-  <section class="px-4">
-    <div class="max-w-6xl mx-auto">
-      <div class="flex justify-center">
-        <div class="bg-white shadow-card rounded-2xl p-1 flex gap-1">
-          <button id="tabSingle" class="btn px-6 py-2 rounded-xl bg-slate-100 text-slate-900">Single</button>
-          <button id="tabBulk"   class="btn px-6 py-2 rounded-xl text-slate-600 hover:text-slate-900">Bulk</button>
+      <!-- Mode toggle -->
+      <div class="mt-6">
+        <div class="bg-white shadow-card inline-flex rounded-2xl p-1">
+          <button id="tabSingle" class="px-6 py-2 rounded-xl bg-slate-100 text-slate-900">Single</button>
+          <button id="tabBulk" class="px-6 py-2 rounded-xl text-slate-600 hover:text-slate-900">Bulk</button>
         </div>
       </div>
     </div>
   </section>
 
   <!-- Single -->
-  <section id="singlePane" class="px-4 mt-8">
+  <section id="singlePane" class="px-4 mt-6">
     <div class="max-w-6xl mx-auto">
       <div class="bg-white shadow-card rounded-2xl p-6 md:p-8">
         <div class="grid md:grid-cols-3 gap-5">
-          <div class="space-y-3">
+          <!-- Asset -->
+          <div class="space-y-2">
             <label class="block text-sm font-medium text-slate-700">Asset / BMP ID</label>
             <input id="singleAsset" placeholder="e.g., WP0399, 210049UT, LOD_12345" class="w-full rounded-xl border p-3 focus:outline-none focus:ring-2 focus:ring-mbBlue" />
           </div>
 
-          <div class="space-y-3">
+          <!-- Dataset -->
+          <div class="space-y-2">
             <label class="block text-sm font-medium text-slate-700">Dataset</label>
             <select id="singleDataset" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
               <optgroup label="Fairfax">
@@ -105,25 +99,27 @@
             </select>
           </div>
 
-          <div class="space-y-3">
+          <!-- Format (segmented) -->
+          <div class="space-y-2">
             <label class="block text-sm font-medium text-slate-700">Format</label>
-            <select id="singleFormat" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
-              <option value="kml">KML</option>
-              <option value="geojson">GeoJSON</option>
-              <option value="shapefile">Shapefile (.zip)</option>
-            </select>
+            <div class="flex gap-2">
+              <button class="seg" data-format="kml">🗺️ KML</button>
+              <button class="seg" data-format="geojson">📊 GeoJSON</button>
+              <button class="seg" data-format="shapefile">🗃️ Shapefile</button>
+            </div>
           </div>
         </div>
 
-        <div class="mt-5 flex flex-wrap items-center gap-3">
-          <button id="singleGo" class="btn btn-primary">Download</button>
+        <!-- Actions -->
+        <div class="mt-6 flex flex-wrap items-center gap-4">
+          <button id="singleGo" class="btn btn-grad">Download</button>
 
           <div id="linkRow" class="hidden items-center gap-3">
-            <a id="mapsLink" target="_blank" class="pill border-blue-200 text-mbBlue hover:bg-blue-50">Open in Google Maps →</a>
-            <button id="copyLink" class="pill bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700">Copy link</button>
+            <a id="mapsLink" target="_blank" class="text-mbBlue hover:underline">Open in Google Maps →</a>
+            <button id="copyLink" class="btn btn-grad">Copy link</button>
           </div>
 
-          <span id="singleNote" class="ml-auto text-sm text-slate-500">
+          <span class="ml-auto text-sm text-slate-500">
             <span class="px-2 py-0.5 rounded-full bg-slate-100 border text-slate-700">Note</span>
             MDOT SHA layers may require VPN.
           </span>
@@ -135,32 +131,17 @@
   </section>
 
   <!-- Bulk -->
-  <section id="bulkPane" class="px-4 mt-8 hidden">
+  <section id="bulkPane" class="px-4 mt-6 hidden">
     <div class="max-w-6xl mx-auto">
       <div class="bg-white shadow-card rounded-2xl p-6 md:p-8">
-        <div class="grid lg:grid-cols-3 gap-6">
-          <!-- Left: CSV -->
-          <div class="lg:col-span-2 space-y-4">
-            <div class="flex items-center justify-between">
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-slate-700">Paste CSV rows</label>
-                <p class="text-xs text-slate-500">Header optional · columns: <code class="kbd">assetId</code> or <code class="kbd">assetId,dataset</code></p>
-              </div>
-              <input id="bulkFile" type="file" accept=".csv" class="hidden" />
-              <button id="bulkFileBtn" class="btn btn-ghost">Upload CSV file</button>
-            </div>
-            <textarea id="bulkText" rows="10" class="w-full rounded-xl border p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-mbBlue" placeholder="WP0399&#10;WP0400, fairfax_bmps&#10;210049UT, mdsha_tmdl_tree_plantings"></textarea>
+        <h3 class="text-2xl font-bold text-slate-900 mb-6 text-center">Bulk Asset Conversion</h3>
 
-            <div class="text-xs text-slate-500">
-              Rows without a dataset use the selection at right. (No auto-detect.)
-            </div>
-          </div>
-
-          <!-- Right: Options -->
-          <div class="space-y-4">
+        <div class="grid md:grid-cols-2 gap-8">
+          <!-- Left column: dataset + CSV drop -->
+          <div class="space-y-6">
             <div class="space-y-2">
-              <label class="block text-sm font-medium text-slate-700">Default dataset (applies if row lacks a dataset)</label>
-              <select id="bulkDataset" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
+              <label class="block text-sm font-semibold text-slate-700">Dataset</label>
+              <select id="bulkDataset" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mbBlue focus:border-transparent">
                 <optgroup label="Fairfax">
                   <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
                 </optgroup>
@@ -178,59 +159,90 @@
               </select>
             </div>
 
-            <div class="space-y-2">
-              <label class="block text-sm font-medium text-slate-700">Format</label>
-              <select id="bulkFormat" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
-                <option value="kmlzip">KML (.zip)</option>
-                <option value="geojsonzip">GeoJSON (.zip)</option>
-                <option value="shpzip">Shapefile (.zip)</option>
-              </select>
+            <!-- Drop zone -->
+            <div id="csvDrop" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-mbBlue transition-colors cursor-pointer">
+              <div class="flex flex-col items-center">
+                <div class="w-12 h-12 bg-gradient-to-r from-mbBlue to-mbGreen rounded-full flex items-center justify-center mb-4">
+                  <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                  </svg>
+                </div>
+                <h4 class="text-lg font-semibold text-gray-900 mb-1">Drop your CSV file here</h4>
+                <p class="text-gray-500 mb-4">or click to browse</p>
+                <button id="csvChooseBtn" class="btn btn-grad">Choose CSV File</button>
+                <input id="bulkFile" type="file" accept=".csv" class="hidden" />
+              </div>
             </div>
 
-            <button id="bulkGo" class="btn btn-green w-full">Download</button>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h5 class="font-semibold text-blue-900 mb-2">CSV Format Requirements:</h5>
+              <ul class="text-sm text-blue-800 space-y-1">
+                <li>• First column: Asset numbers</li>
+                <li>• Header row required</li>
+                <li>• Maximum 1000 assets per file</li>
+              </ul>
+            </div>
+          </div>
 
-            <div class="text-xs text-slate-500">
-              Bulk zips also include <code class="kbd">mapbuddy_links.csv</code> with Google Maps links.
+          <!-- Right column: output format cards -->
+          <div class="space-y-4">
+            <label class="block text-sm font-semibold text-slate-700 mb-2">Output Formats</label>
+
+            <button class="w-full text-left p-4 rounded-xl border hover:border-mbGreen transition flex items-start gap-4" data-bulkfmt="kmlzip">
+              <span class="mt-1 card-radio"></span>
+              <div>
+                <div class="font-semibold text-slate-900 flex items-center gap-2">🗺️ KML Files</div>
+                <div class="text-sm text-slate-500">Google Earth format</div>
+              </div>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl border hover:border-mbGreen transition flex items-start gap-4" data-bulkfmt="geojsonzip">
+              <span class="mt-1 card-radio"></span>
+              <div>
+                <div class="font-semibold text-slate-900 flex items-center gap-2">📊 GeoJSON Files</div>
+                <div class="text-sm text-slate-500">Web mapping format</div>
+              </div>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl border hover:border-mbGreen transition flex items-start gap-4" data-bulkfmt="shpzip">
+              <span class="mt-1 card-radio"></span>
+              <div>
+                <div class="font-semibold text-slate-900 flex items-center gap-2">🗃️ Shapefile</div>
+                <div class="text-sm text-slate-500">GIS standard format</div>
+              </div>
+            </button>
+
+            <div class="w-full text-left p-4 rounded-xl border bg-slate-50 flex items-start gap-4 opacity-90">
+              <span class="mt-1 card-radio on"></span>
+              <div>
+                <div class="font-semibold text-slate-900 flex items-center gap-2">🌐 Google Maps Links</div>
+                <div class="text-sm text-slate-500">Direct map links (CSV) — included with bulk</div>
+              </div>
             </div>
           </div>
         </div>
 
-        <p id="bulkStatus" class="mt-4 text-sm text-slate-600"></p>
+        <div class="text-center mt-8">
+          <button id="bulkGo" class="btn btn-grad">Process Bulk Conversion</button>
+        </div>
+
+        <p id="bulkStatus" class="mt-4 text-sm text-slate-600 text-center"></p>
       </div>
     </div>
   </section>
 
   <footer class="py-10 text-center text-slate-400 text-sm">
-    © 2024 MapBuddy · Simple, reliable asset-to-map conversion.
+    © 2025 MapBuddy · Simple, reliable asset-to-map conversion.
   </footer>
 
   <script>
-    // --- Elements
+    // Mode switching
     const tabSingle = document.getElementById('tabSingle');
     const tabBulk   = document.getElementById('tabBulk');
     const singlePane= document.getElementById('singlePane');
     const bulkPane  = document.getElementById('bulkPane');
-
-    const singleAsset   = document.getElementById('singleAsset');
-    const singleDataset = document.getElementById('singleDataset');
-    const singleFormat  = document.getElementById('singleFormat');
-    const singleGo      = document.getElementById('singleGo');
-    const singleStatus  = document.getElementById('singleStatus');
-    const mapsLink      = document.getElementById('mapsLink');
-    const copyLinkBtn   = document.getElementById('copyLink');
-    const linkRow       = document.getElementById('linkRow');
-
-    const bulkText     = document.getElementById('bulkText');
-    const bulkFile     = document.getElementById('bulkFile');
-    const bulkFileBtn  = document.getElementById('bulkFileBtn');
-    const bulkDataset  = document.getElementById('bulkDataset');
-    const bulkFormat   = document.getElementById('bulkFormat');
-    const bulkGo       = document.getElementById('bulkGo');
-    const bulkStatus   = document.getElementById('bulkStatus');
-
-    // --- Helpers
-    function setTab(isSingle) {
-      if (isSingle) {
+    const setTab = (single=true) => {
+      if (single) {
         tabSingle.classList.add('bg-slate-100','text-slate-900');
         tabBulk.classList.remove('bg-slate-100','text-slate-900');
         singlePane.classList.remove('hidden');
@@ -244,170 +256,170 @@
     }
     tabSingle.onclick = () => setTab(true);
     tabBulk.onclick   = () => setTab(false);
+    setTab(true);
 
-    function downloadBlob(filename, blob) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-
-    // Persist last choices
-    function savePrefs() {
-      localStorage.setItem('mb.dataset', singleDataset.value);
-      localStorage.setItem('mb.format',  singleFormat.value);
-      localStorage.setItem('mb.bulkDataset', bulkDataset.value);
-      localStorage.setItem('mb.bulkFormat',  bulkFormat.value);
-    }
-    function loadPrefs() {
-      const d = localStorage.getItem('mb.dataset');
-      const f = localStorage.getItem('mb.format');
-      const bd= localStorage.getItem('mb.bulkDataset');
-      const bf= localStorage.getItem('mb.bulkFormat');
-      if (d) singleDataset.value = d;
-      if (f) singleFormat.value  = f;
-      if (bd) bulkDataset.value  = bd;
-      if (bf) bulkFormat.value   = bf;
-    }
-    loadPrefs();
-    [singleDataset,singleFormat,bulkDataset,bulkFormat].forEach(el => el.addEventListener('change', savePrefs));
-
-    // --- Single: locate->convert
-    async function locate(assetId, dataset) {
-      const r = await fetch('/api/locate', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ assetId, dataset })
+    // Single segmented selector
+    const segBtns = document.querySelectorAll('[data-format]');
+    let selectedFormat = localStorage.getItem('mb.formatSeg') || 'kml';
+    function renderSeg(){
+      segBtns.forEach(b=>{
+        if(b.dataset.format===selectedFormat){ b.classList.add('seg-active'); b.classList.remove('border'); }
+        else { b.classList.remove('seg-active'); b.classList.add('border'); }
       });
-      if (!r.ok) throw new Error(`Locate failed (HTTP ${r.status})`);
+    }
+    segBtns.forEach(b=>b.addEventListener('click',()=>{ selectedFormat=b.dataset.format; localStorage.setItem('mb.formatSeg',selectedFormat); renderSeg(); }));
+    renderSeg();
+
+    // Persist dataset choices
+    function savePrefs(){
+      localStorage.setItem('mb.dataset', document.getElementById('singleDataset').value);
+      localStorage.setItem('mb.bulkDataset', document.getElementById('bulkDataset').value);
+      localStorage.setItem('mb.bulkFmt', bulkFmt);
+    }
+    function loadPrefs(){
+      const d=localStorage.getItem('mb.dataset');
+      const bd=localStorage.getItem('mb.bulkDataset');
+      const bf=localStorage.getItem('mb.bulkFmt');
+      if(d) document.getElementById('singleDataset').value=d;
+      if(bd) document.getElementById('bulkDataset').value=bd;
+      if(bf) bulkFmt=bf;
+      renderBulkCards();
+    }
+
+    // API helpers
+    async function locate(assetId, dataset){
+      const r=await fetch('/api/locate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assetId,dataset})});
+      if(!r.ok) throw new Error(`Locate failed (HTTP ${r.status})`);
       return r.json();
     }
-
-    async function convert(assetId, dataset, format) {
-      const r = await fetch('/api/convert', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ assetId, dataset, format })
-      });
-      if (!r.ok) {
-        let msg = `Request failed (HTTP ${r.status})`;
-        try { const err = await r.json(); if (err?.error) msg = err.error; } catch {}
-        throw new Error(msg);
-      }
+    async function convert(assetId, dataset, format){
+      const r=await fetch('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assetId,dataset,format})});
+      if(!r.ok){ let msg=`Request failed (HTTP ${r.status})`; try{const e=await r.json(); if(e?.error) msg=e.error;}catch{} throw new Error(msg);}
       return r.blob();
     }
+    function downloadBlob(filename, blob){
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    // Single flow
+    const singleAsset   = document.getElementById('singleAsset');
+    const singleDataset = document.getElementById('singleDataset');
+    const singleGo      = document.getElementById('singleGo');
+    const singleStatus  = document.getElementById('singleStatus');
+    const mapsLink      = document.getElementById('mapsLink');
+    const copyLinkBtn   = document.getElementById('copyLink');
+    const linkRow       = document.getElementById('linkRow');
+
+    singleDataset.addEventListener('change', savePrefs);
 
     singleGo.onclick = async () => {
-      const asset   = singleAsset.value.trim();
+      const asset = singleAsset.value.trim();
       const dataset = singleDataset.value;
-      const format  = singleFormat.value; // 'kml' | 'geojson' | 'shapefile'
-      if (!asset) { singleStatus.textContent = 'Please enter an Asset / BMP ID.'; return; }
+      const format = selectedFormat; // 'kml'|'geojson'|'shapefile'
+      if(!asset){ singleStatus.textContent='Please enter an Asset / BMP ID.'; return; }
 
-      singleGo.disabled = true;
-      singleStatus.textContent = 'Locating…';
-      linkRow.classList.add('hidden');
+      singleGo.disabled=true; singleStatus.textContent='Locating…'; linkRow.classList.add('hidden');
 
-      try {
-        const info = await locate(asset, dataset);
-        if (info?.googleMapsUrl) {
-          mapsLink.href = info.googleMapsUrl;
+      try{
+        const info=await locate(asset,dataset);
+        if(info?.googleMapsUrl){
+          mapsLink.href=info.googleMapsUrl;
           linkRow.classList.remove('hidden');
-          copyLinkBtn.onclick = async () => {
-            try {
-              await navigator.clipboard.writeText(info.googleMapsUrl);
-              singleStatus.textContent = 'Copied Google Maps link.';
-            } catch { singleStatus.textContent = 'Copy failed.'; }
-          }
+          copyLinkBtn.onclick=async()=>{ try{ await navigator.clipboard.writeText(info.googleMapsUrl); singleStatus.textContent='Copied Google Maps link.'; }catch{ singleStatus.textContent='Copy failed.'; } }
         }
-        singleStatus.textContent = 'Converting…';
-        const blob = await convert(asset, dataset, format);
-        const ext  = (format === 'kml') ? 'kml' : (format === 'geojson') ? 'geojson' : 'zip';
-        downloadBlob(`${asset}.${ext}`, blob);
-        singleStatus.textContent = 'Done.';
-      } catch (e) {
-        singleStatus.textContent = e.message || 'Error';
-      } finally {
-        singleGo.disabled = false;
-      }
+        singleStatus.textContent='Converting…';
+        const blob=await convert(asset,dataset,format);
+        const ext=(format==='kml')?'kml':(format==='geojson')?'geojson':'zip';
+        downloadBlob(`${asset}.${ext}`,blob);
+        singleStatus.textContent='Done.';
+      }catch(e){ singleStatus.textContent=e.message||'Error'; }
+      finally{ singleGo.disabled=false; }
     };
 
-    // --- Bulk: CSV handling & POST /api/bulk
-    bulkFileBtn.onclick = () => bulkFile.click();
-    bulkFile.onchange = async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      document.getElementById('bulkText').value = text.trim();
-    };
+    // Bulk: CSV drop + format cards
+    const csvDrop       = document.getElementById('csvDrop');
+    const csvChooseBtn  = document.getElementById('csvChooseBtn');
+    const bulkFile      = document.getElementById('bulkFile');
+    const bulkDataset   = document.getElementById('bulkDataset');
+    const bulkGo        = document.getElementById('bulkGo');
+    const bulkStatus    = document.getElementById('bulkStatus');
 
-    function parseCsvToItems(text, defaultDataset) {
-      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      if (lines.length === 0) return [];
-      // Check for header by looking for non-ID words in first row
-      const first = lines[0].split(',').map(s => s.trim());
-      let start = 0;
-      if (first[0].toLowerCase().includes('asset')) start = 1;
+    let csvText='';
+    function markCsvOK(){
+      csvDrop.classList.remove('border-gray-300');
+      csvDrop.classList.add('border-mbGreen','bg-green-50');
+      csvDrop.querySelector('h4').textContent='CSV uploaded successfully!';
+      csvDrop.querySelector('p').textContent='Ready to process';
+      savePrefs();
+    }
+    function handleFile(f){
+      if(!f) return;
+      f.text().then(t=>{ csvText=t.trim(); if(csvText) markCsvOK(); });
+    }
+    csvDrop.addEventListener('dragover',e=>{ e.preventDefault(); csvDrop.classList.add('border-mbBlue','bg-blue-50'); });
+    csvDrop.addEventListener('dragleave',()=>{ csvDrop.classList.remove('border-mbBlue','bg-blue-50'); });
+    csvDrop.addEventListener('drop',e=>{ e.preventDefault(); csvDrop.classList.remove('border-mbBlue','bg-blue-50'); handleFile(e.dataTransfer.files?.[0]); });
+    csvDrop.addEventListener('click',()=> bulkFile.click());
+    csvChooseBtn.addEventListener('click',e=>{ e.stopPropagation(); bulkFile.click(); });
+    bulkFile.addEventListener('change',e=> handleFile(e.target.files?.[0]) );
 
-      const items = [];
-      for (let i=start; i<lines.length; i++) {
-        const cols = lines[i].split(',').map(s => s.trim()).filter(c => c.length);
-        if (!cols.length) continue;
-        const assetId = cols[0];
-        const dataset = (cols[1] && cols[1] !== '-') ? cols[1] : defaultDataset;
-        if (assetId) items.push({ assetId, dataset });
+    // Bulk format cards (exclusive)
+    const bulkFmtButtons = document.querySelectorAll('[data-bulkfmt]');
+    let bulkFmt='kmlzip';
+    function renderBulkCards(){
+      bulkFmtButtons.forEach(b=>{
+        const radio=b.querySelector('.card-radio');
+        if(b.dataset.bulkfmt===bulkFmt){
+          b.classList.add('border-mbGreen','bg-green-50');
+          radio.classList.add('on');
+        }else{
+          b.classList.remove('border-mbGreen','bg-green-50');
+          radio.classList.remove('on');
+        }
+      });
+    }
+    bulkFmtButtons.forEach(b=> b.addEventListener('click',()=>{ bulkFmt=b.dataset.bulkfmt; renderBulkCards(); savePrefs(); }));
+    renderBulkCards();
+    bulkDataset.addEventListener('change', savePrefs);
+    loadPrefs();
+
+    function parseCsvToItems(text, defaultDataset){
+      const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      if(!lines.length) return [];
+      const first=lines[0].split(',').map(s=>s.trim());
+      let i0=0; if(first[0].toLowerCase().includes('asset')) i0=1;
+      const items=[];
+      for(let i=i0;i<lines.length;i++){
+        const cols=lines[i].split(',').map(s=>s.trim()).filter(Boolean);
+        if(!cols.length) continue;
+        const assetId=cols[0];
+        const dataset=(cols[1]&&cols[1]!=='-')?cols[1]:defaultDataset;
+        if(assetId) items.push({assetId,dataset});
       }
       return items;
     }
 
-    async function bulkConvert(payload) {
-      const r = await fetch('/api/bulk', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      if (!r.ok) {
-        let msg = `Bulk failed (HTTP ${r.status})`;
-        try { const err = await r.json(); if (err?.error) msg = err.error; } catch {}
-        throw new Error(msg);
-      }
+    async function bulkConvert(payload){
+      const r=await fetch('/api/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!r.ok){ let msg=`Bulk failed (HTTP ${r.status})`; try{const e=await r.json(); if(e?.error) msg=e.error;}catch{} throw new Error(msg); }
       return r.blob();
     }
 
-    bulkGo.onclick = async () => {
-      const text = bulkText.value.trim();
-      if (!text) { bulkStatus.textContent = 'Paste or upload a CSV first.'; return; }
-      const defaultDataset = bulkDataset.value;
-      const fmt = bulkFormat.value; // 'kmlzip'|'geojsonzip'|'shpzip'
+    bulkGo.onclick = async ()=>{
+      if(!csvText){ bulkStatus.textContent='Please upload a CSV file.'; return; }
+      const items=parseCsvToItems(csvText, bulkDataset.value);
+      if(!items.length){ bulkStatus.textContent='No parsable rows found.'; return; }
 
-      const items = parseCsvToItems(text, defaultDataset);
-      if (items.length === 0) { bulkStatus.textContent = 'No parsable rows found.'; return; }
-
-      bulkGo.disabled = true;
-      bulkStatus.textContent = `Processing ${items.length} item(s)…`;
-      try {
-        const blob = await bulkConvert({
-          items,
-          defaultDataset,
-          format: fmt
-        });
-        const name = (fmt === 'kmlzip') ? 'mapbuddy_kml.zip'
-                   : (fmt === 'geojsonzip') ? 'mapbuddy_geojson.zip'
-                   : 'mapbuddy_shapefile.zip';
+      bulkGo.disabled=true; bulkStatus.textContent=`Processing ${items.length} item(s)…`;
+      try{
+        const blob=await bulkConvert({ items, defaultDataset: bulkDataset.value, format: bulkFmt });
+        const name= bulkFmt==='kmlzip' ? 'mapbuddy_kml.zip' : bulkFmt==='geojsonzip' ? 'mapbuddy_geojson.zip' : 'mapbuddy_shapefile.zip';
         downloadBlob(name, blob);
-        bulkStatus.textContent = 'Done.';
-      } catch (e) {
-        bulkStatus.textContent = e.message || 'Error';
-      } finally {
-        bulkGo.disabled = false;
-      }
+        bulkStatus.textContent='Done. (mapbuddy_links.csv included)';
+      }catch(e){ bulkStatus.textContent=e.message||'Error'; }
+      finally{ bulkGo.disabled=false; }
     };
-
-    // Start on Single
-    setTab(true);
   </script>
 </body>
 </html>
