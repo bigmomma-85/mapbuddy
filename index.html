@@ -2,242 +2,101 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>MapBuddy — Asset → KML / GeoJSON / Shapefile</title>
-  <meta name="color-scheme" content="light only" />
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            mbBlue:  '#2563eb',
+            mbGreen: '#059669',
+            mbSlate: '#0f172a'
+          },
+          boxShadow: {
+            card: '0 10px 30px rgba(2,6,23,.06)'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%232563eb' d='M6 10a4 4 0 0 1 4-4h4l8 3l8-3h4a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4h-4l-8-3l-8 3h-4a4 4 0 0 1-4-4z'/%3E%3Cpath fill='%23059669' d='M14 6v32l8-3V3zM34 6v32l-8-3V3z'/%3E%3C/svg%3E" />
   <style>
-    :root{
-      --bg: #f4f8fb;
-      --card: #ffffff;
-      --text: #0f2233;
-      --muted:#5b6b7b;
-      --accent:#2563eb;
-      --accent-2:#0ea5e9;
-      --accent-3:#22c55e;
-      --stroke:#e6eef6;
-      --shadow: 0 10px 30px rgba(16,24,40,.06);
-      --radius:16px;
-    }
-
-    /* page */
-    html,body{height:100%}
-    body{
-      margin:0;
-      font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-      color:var(--text);
-      background:
-        radial-gradient(1200px 500px at 10% -10%, #eaf3ff 10%, transparent 60%),
-        radial-gradient(1000px 500px at 120% 0%, #ecfeff 10%, transparent 60%),
-        var(--bg);
-    }
-    .wrap{
-      max-width: 1120px;
-      margin: 48px auto;
-      padding: 0 20px 80px;
-    }
-
-    /* header */
-    .header{
-      display:flex;align-items:center;justify-content:space-between;gap:16px;
-      margin-bottom: 18px;
-    }
-    .brand{
-      display:flex;align-items:center;gap:14px;
-    }
-    .logo{
-      width:44px;height:44px;border-radius:12px;
-      background: linear-gradient(135deg,var(--accent),var(--accent-2));
-      display:grid;place-items:center;color:white;
-      box-shadow: 0 6px 18px rgba(37,99,235,.22);
-    }
-    .logo svg{width:22px;height:22px;display:block}
-    h1{
-      margin:0;font-weight:800;letter-spacing:.2px;
-      font-size: clamp(28px, 3.6vw, 44px);
-    }
-    .subtitle{
-      color:var(--muted);margin:8px 0 24px;
-      font-size:15px;
-    }
-
-    /* mode toggle */
-    .tabs{
-      display:flex;gap:10px;
-      background:#eef5fb;border:1px solid var(--stroke);
-      border-radius:999px;padding:6px;box-shadow: var(--shadow);
-    }
-    .tab{
-      appearance:none;border:0;background:transparent;color:var(--muted);
-      padding:10px 18px;border-radius:999px;font-weight:600;cursor:pointer;
-    }
-    .tab.active{background:white;color:var(--text);box-shadow:0 4px 12px rgba(16,24,40,.06)}
-    .tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
-
-    /* card */
-    .card{
-      background:var(--card);border:1px solid var(--stroke);
-      border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;
-    }
-    .grid{
-      display:grid;gap:14px;
-      grid-template-columns: 1fr;
-    }
-    @media(min-width:960px){
-      .grid{grid-template-columns: 1.2fr 1.1fr .9fr;}
-    }
-
-    label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#6b7c8f;font-weight:700}
-    .field{display:flex;flex-direction:column;gap:8px}
-
-    input, select, textarea{
-      width:100%;border:1px solid #dbe7f3;background:#fbfdff;color:var(--text);
-      padding:12px 14px;border-radius:12px;font-size:16px;
-      transition: box-shadow .15s, border-color .15s;
-    }
-    input:focus, select:focus, textarea:focus{outline:0;border-color:#b6cff1;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-    textarea{min-height:220px;resize:vertical}
-
-    /* buttons */
-    .actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:6px}
-    .btn{
-      appearance:none;border:0;border-radius:12px;cursor:pointer;
-      font-weight:700;font-size:16px;padding:12px 18px;
-      display:inline-flex;gap:10px;align-items:center;justify-content:center;
-    }
-    .btn svg{width:18px;height:18px}
-    .primary{background:var(--accent);color:white;box-shadow:0 10px 20px rgba(37,99,235,.22)}
-    .primary:disabled{opacity:.6;cursor:not-allowed}
-    .ghost{background:#eef5fb;color:#0f2233;border:1px solid var(--stroke)}
-    .success{background:var(--accent-3);color:#083b16}
-    .mini{padding:8px 12px;font-size:14px}
-
-    .note{display:flex;align-items:center;gap:8px;margin-top:10px;color:#556579}
-    .chip{font-size:13px;padding:6px 10px;border-radius:999px;background:#f2f7ff;border:1px solid var(--stroke)}
-    .status{min-height:24px;margin-left:12px;color:#183247}
-    .linksRow{display:flex;align-items:center;gap:12px;margin-top:6px}
-    .linksRow a{color:#0f6ad7;text-decoration:none}
-    .linksRow a:hover{text-decoration:underline}
-
-    /* bulk section */
-    .bulkGrid{display:grid;gap:14px}
-    @media(min-width:1000px){
-      .bulkGrid{grid-template-columns: 1.2fr 1fr}
-    }
-    .hint{color:#6a7b8d;font-size:13px;margin:6px 0 0}
-
-    /* footer space */
-    .pad{height:40px}
+    .pill { @apply inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm; }
+    .btn  { @apply inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold transition; }
+    .btn-primary { @apply bg-mbBlue text-white hover:bg-blue-600; }
+    .btn-ghost   { @apply bg-white text-mbBlue border border-blue-200 hover:border-blue-300; }
+    .btn-green   { @apply bg-mbGreen text-white hover:bg-emerald-600; }
+    .kbd { @apply px-2 py-0.5 rounded border text-xs text-slate-600 bg-slate-50; }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <!-- Header -->
-    <div class="header">
-      <div class="brand">
-        <div class="logo" aria-hidden="true">
-          <!-- map pin icon -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z"/>
-            <circle cx="12" cy="11" r="2.5" fill="currentColor" stroke="none"/>
-          </svg>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+  <!-- Header -->
+  <header class="bg-white border-b">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-r from-mbBlue to-mbGreen grid place-items-center shadow-sm">
+            <svg width="18" height="18" viewBox="0 0 24 24" class="text-white">
+              <path fill="currentColor" d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+          </div>
+          <span class="font-bold text-xl text-slate-900">MapBuddy</span>
         </div>
-        <h1>MapBuddy — Asset → KML / GeoJSON / Shapefile</h1>
-      </div>
-      <div class="tabs" role="tablist" aria-label="Mode">
-        <button class="tab active" id="tabSingle" role="tab" aria-selected="true">Single</button>
-        <button class="tab" id="tabBulk" role="tab" aria-selected="false">Bulk</button>
       </div>
     </div>
+  </header>
 
-    <p class="subtitle">
-      Fast one-offs or bulk lists. Convert ArcGIS features to <strong>KML</strong>, <strong>GeoJSON</strong>, or
-      <strong>zipped Shapefile</strong>. Includes Google Maps link helper. MDOT SHA layers may require VPN.
-    </p>
+  <!-- Hero -->
+  <section class="px-4">
+    <div class="max-w-6xl mx-auto pt-10 pb-4">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 leading-tight">
+        Convert Assets to <span class="bg-clip-text text-transparent bg-gradient-to-r from-mbBlue to-mbGreen">Map Files</span>
+      </h1>
+      <p class="mt-4 text-lg text-slate-600 max-w-3xl">
+        Fast one-offs or bulk lists. Generate <strong>KML</strong>, <strong>GeoJSON</strong>, or zipped <strong>Shapefile</strong> from ArcGIS features.
+        Bulk downloads include a <code class="kbd">mapbuddy_links.csv</code> with Google Maps links.
+      </p>
+    </div>
+  </section>
 
-    <!-- Single card -->
-    <section id="panelSingle" class="card" role="tabpanel" aria-labelledby="tabSingle">
-      <div class="grid">
-        <div class="field">
-          <label for="asset">Asset / BMP ID</label>
-          <input id="asset" placeholder="e.g., WP0399, 210049UT, LOD_12345" autocomplete="off" />
-        </div>
-
-        <div class="field">
-          <label for="dataset">Dataset</label>
-          <select id="dataset">
-            <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-            <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
-            <optgroup label="MDOT SHA — TMDL">
-              <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures</option>
-              <option value="mdsha_tmdl_ret">TMDL — Retrofits</option>
-              <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
-              <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
-              <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
-              <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
-            </optgroup>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="format">Format</label>
-          <select id="format">
-            <option value="kml">KML</option>
-            <option value="geojson">GeoJSON</option>
-            <option value="shp">Shapefile (.zip)</option>
-          </select>
+  <!-- Mode toggle -->
+  <section class="px-4">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex justify-center">
+        <div class="bg-white shadow-card rounded-2xl p-1 flex gap-1">
+          <button id="tabSingle" class="btn px-6 py-2 rounded-xl bg-slate-100 text-slate-900">Single</button>
+          <button id="tabBulk"   class="btn px-6 py-2 rounded-xl text-slate-600 hover:text-slate-900">Bulk</button>
         </div>
       </div>
+    </div>
+  </section>
 
-      <div class="actions">
-        <button id="btnDownload" class="btn primary">
-          <!-- download icon -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg>
-          Download
-        </button>
+  <!-- Single -->
+  <section id="singlePane" class="px-4 mt-8">
+    <div class="max-w-6xl mx-auto">
+      <div class="bg-white shadow-card rounded-2xl p-6 md:p-8">
+        <div class="grid md:grid-cols-3 gap-5">
+          <div class="space-y-3">
+            <label class="block text-sm font-medium text-slate-700">Asset / BMP ID</label>
+            <input id="singleAsset" placeholder="e.g., WP0399, 210049UT, LOD_12345" class="w-full rounded-xl border p-3 focus:outline-none focus:ring-2 focus:ring-mbBlue" />
+          </div>
 
-        <button id="btnCopy" class="btn ghost mini" disabled>
-          <!-- link icon -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M10 13a5 5 0 0 1 0-7l1.2-1.2a5 5 0 1 1 7 7L17 12"/>
-            <path d="M14 11a5 5 0 0 1 0 7L12.8 19.2a5 5 0 1 1-7-7L7 10"/>
-          </svg>
-          Copy link
-        </button>
-
-        <div class="linksRow" id="mapsRow" hidden>
-          <a id="mapsLink" target="_blank" rel="noopener">Open in Google Maps</a>
-          <span class="status" id="coords"></span>
-        </div>
-      </div>
-
-      <div class="note">
-        <span class="chip">Note</span>
-        <span>MDOT SHA layers may require VPN. MapBuddy saves your last choices locally.</span>
-      </div>
-    </section>
-
-    <div class="pad"></div>
-
-    <!-- Bulk card -->
-    <section id="panelBulk" class="card" role="tabpanel" aria-labelledby="tabBulk" hidden>
-      <div class="bulkGrid">
-        <div class="field">
-          <label for="bulkText">Paste CSV rows <small style="text-transform:none;color:#7b8896">(header optional; columns: <code>assetId</code> or <code>assetId,dataset</code>)</small></label>
-          <textarea id="bulkText" placeholder="0256DP&#10;WP0400&#10;210049UT,mdsha_tmdl_tree_plantings"></textarea>
-          <p class="hint">Rows without a dataset will use the <em>Default dataset</em> dropdown (no auto-detect).</p>
-        </div>
-
-        <div class="field">
-          <label for="bulkFile">Upload CSV file</label>
-          <input id="bulkFile" type="file" accept=".csv,text/csv" />
-          <div class="field" style="margin-top:12px">
-            <label for="bulkDataset">Default dataset (applies to rows without a dataset)</label>
-            <select id="bulkDataset">
-              <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-              <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
+          <div class="space-y-3">
+            <label class="block text-sm font-medium text-slate-700">Dataset</label>
+            <select id="singleDataset" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
+              <optgroup label="Fairfax">
+                <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
+              </optgroup>
+              <optgroup label="MDOT SHA">
+                <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
+              </optgroup>
               <optgroup label="MDOT SHA — TMDL">
                 <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures</option>
-                <option value="mdsha_tmdl_ret">TMDL — Retrofits</option>
+                <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
                 <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
                 <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
                 <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
@@ -246,212 +105,309 @@
             </select>
           </div>
 
-          <div class="field" style="margin-top:12px">
-            <label for="bulkFormat">Format</label>
-            <select id="bulkFormat">
-              <option value="kmlzip">KML (.zip)</option>
-              <option value="geojsonzip">GeoJSON (.zip)</option>
-              <option value="shp">Shapefile (.zip)</option>
+          <div class="space-y-3">
+            <label class="block text-sm font-medium text-slate-700">Format</label>
+            <select id="singleFormat" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
+              <option value="kml">KML</option>
+              <option value="geojson">GeoJSON</option>
+              <option value="shapefile">Shapefile (.zip)</option>
             </select>
           </div>
+        </div>
 
-          <div class="actions" style="margin-top:14px">
-            <button id="btnBulk" class="btn primary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg>
-              Download
-            </button>
-            <span class="status" id="bulkStatus"></span>
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <button id="singleGo" class="btn btn-primary">Download</button>
+
+          <div id="linkRow" class="hidden items-center gap-3">
+            <a id="mapsLink" target="_blank" class="pill border-blue-200 text-mbBlue hover:bg-blue-50">Open in Google Maps →</a>
+            <button id="copyLink" class="pill bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700">Copy link</button>
+          </div>
+
+          <span id="singleNote" class="ml-auto text-sm text-slate-500">
+            <span class="px-2 py-0.5 rounded-full bg-slate-100 border text-slate-700">Note</span>
+            MDOT SHA layers may require VPN.
+          </span>
+        </div>
+
+        <p id="singleStatus" class="mt-3 text-sm text-slate-600"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bulk -->
+  <section id="bulkPane" class="px-4 mt-8 hidden">
+    <div class="max-w-6xl mx-auto">
+      <div class="bg-white shadow-card rounded-2xl p-6 md:p-8">
+        <div class="grid lg:grid-cols-3 gap-6">
+          <!-- Left: CSV -->
+          <div class="lg:col-span-2 space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="space-y-2">
+                <label class="block text-sm font-medium text-slate-700">Paste CSV rows</label>
+                <p class="text-xs text-slate-500">Header optional · columns: <code class="kbd">assetId</code> or <code class="kbd">assetId,dataset</code></p>
+              </div>
+              <input id="bulkFile" type="file" accept=".csv" class="hidden" />
+              <button id="bulkFileBtn" class="btn btn-ghost">Upload CSV file</button>
+            </div>
+            <textarea id="bulkText" rows="10" class="w-full rounded-xl border p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-mbBlue" placeholder="WP0399&#10;WP0400, fairfax_bmps&#10;210049UT, mdsha_tmdl_tree_plantings"></textarea>
+
+            <div class="text-xs text-slate-500">
+              Rows without a dataset use the selection at right. (No auto-detect.)
+            </div>
+          </div>
+
+          <!-- Right: Options -->
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <label class="block text-sm font-medium text-slate-700">Default dataset (applies if row lacks a dataset)</label>
+              <select id="bulkDataset" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
+                <optgroup label="Fairfax">
+                  <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
+                </optgroup>
+                <optgroup label="MDOT SHA">
+                  <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
+                </optgroup>
+                <optgroup label="MDOT SHA — TMDL">
+                  <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures</option>
+                  <option value="mdsha_tmdl_retrofits">TMDL — Retrofits</option>
+                  <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings</option>
+                  <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals</option>
+                  <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations</option>
+                  <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-sm font-medium text-slate-700">Format</label>
+              <select id="bulkFormat" class="w-full rounded-xl border p-3 bg-white focus:outline-none focus:ring-2 focus:ring-mbBlue">
+                <option value="kmlzip">KML (.zip)</option>
+                <option value="geojsonzip">GeoJSON (.zip)</option>
+                <option value="shpzip">Shapefile (.zip)</option>
+              </select>
+            </div>
+
+            <button id="bulkGo" class="btn btn-green w-full">Download</button>
+
+            <div class="text-xs text-slate-500">
+              Bulk zips also include <code class="kbd">mapbuddy_links.csv</code> with Google Maps links.
+            </div>
           </div>
         </div>
+
+        <p id="bulkStatus" class="mt-4 text-sm text-slate-600"></p>
       </div>
-    </section>
-  </div>
+    </div>
+  </section>
+
+  <footer class="py-10 text-center text-slate-400 text-sm">
+    © 2024 MapBuddy · Simple, reliable asset-to-map conversion.
+  </footer>
 
   <script>
-    // ---- small helpers -------------------------------------------------------
-    const $ = (sel) => document.querySelector(sel);
-    const btnCopy = $('#btnCopy');
-    const mapsRow = $('#mapsRow');
-    const mapsLinkEl = $('#mapsLink');
-    const coordsEl = $('#coords');
+    // --- Elements
+    const tabSingle = document.getElementById('tabSingle');
+    const tabBulk   = document.getElementById('tabBulk');
+    const singlePane= document.getElementById('singlePane');
+    const bulkPane  = document.getElementById('bulkPane');
 
-    // persist last choices
-    const save = (k,v)=>localStorage.setItem(k, JSON.stringify(v));
-    const load = (k,d)=>{ try{return JSON.parse(localStorage.getItem(k)) ?? d;}catch{ return d; }};
+    const singleAsset   = document.getElementById('singleAsset');
+    const singleDataset = document.getElementById('singleDataset');
+    const singleFormat  = document.getElementById('singleFormat');
+    const singleGo      = document.getElementById('singleGo');
+    const singleStatus  = document.getElementById('singleStatus');
+    const mapsLink      = document.getElementById('mapsLink');
+    const copyLinkBtn   = document.getElementById('copyLink');
+    const linkRow       = document.getElementById('linkRow');
 
-    // tabs
-    const tabSingle = $('#tabSingle'), tabBulk = $('#tabBulk');
-    const panelSingle = $('#panelSingle'), panelBulk = $('#panelBulk');
-    function setTab(which){
-      const single = which === 'single';
-      tabSingle.classList.toggle('active', single);
-      tabBulk.classList.toggle('active', !single);
-      panelSingle.hidden = !single;
-      panelBulk.hidden = single;
-      save('ui_tab', which);
+    const bulkText     = document.getElementById('bulkText');
+    const bulkFile     = document.getElementById('bulkFile');
+    const bulkFileBtn  = document.getElementById('bulkFileBtn');
+    const bulkDataset  = document.getElementById('bulkDataset');
+    const bulkFormat   = document.getElementById('bulkFormat');
+    const bulkGo       = document.getElementById('bulkGo');
+    const bulkStatus   = document.getElementById('bulkStatus');
+
+    // --- Helpers
+    function setTab(isSingle) {
+      if (isSingle) {
+        tabSingle.classList.add('bg-slate-100','text-slate-900');
+        tabBulk.classList.remove('bg-slate-100','text-slate-900');
+        singlePane.classList.remove('hidden');
+        bulkPane.classList.add('hidden');
+      } else {
+        tabBulk.classList.add('bg-slate-100','text-slate-900');
+        tabSingle.classList.remove('bg-slate-100','text-slate-900');
+        bulkPane.classList.remove('hidden');
+        singlePane.classList.add('hidden');
+      }
     }
-    tabSingle.onclick = () => setTab('single');
-    tabBulk.onclick   = () => setTab('bulk');
-    setTab(load('ui_tab','single'));
+    tabSingle.onclick = () => setTab(true);
+    tabBulk.onclick   = () => setTab(false);
 
-    // restore dropdowns
-    const datasetEl = $('#dataset'), formatEl = $('#format');
-    const bulkDatasetEl = $('#bulkDataset'), bulkFormatEl = $('#bulkFormat');
-    datasetEl.value = load('ds', datasetEl.value);
-    formatEl.value  = load('fmt', formatEl.value);
-    bulkDatasetEl.value = load('b_ds', bulkDatasetEl.value);
-    bulkFormatEl.value  = load('b_fmt', bulkFormatEl.value);
-    datasetEl.onchange = ()=>save('ds', datasetEl.value);
-    formatEl.onchange  = ()=>save('fmt', formatEl.value);
-    bulkDatasetEl.onchange = ()=>save('b_ds', bulkDatasetEl.value);
-    bulkFormatEl.onchange  = ()=>save('b_fmt', bulkFormatEl.value);
+    function downloadBlob(filename, blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
 
-    // ---- API wrappers --------------------------------------------------------
-    async function locate(assetId, dataset){
+    // Persist last choices
+    function savePrefs() {
+      localStorage.setItem('mb.dataset', singleDataset.value);
+      localStorage.setItem('mb.format',  singleFormat.value);
+      localStorage.setItem('mb.bulkDataset', bulkDataset.value);
+      localStorage.setItem('mb.bulkFormat',  bulkFormat.value);
+    }
+    function loadPrefs() {
+      const d = localStorage.getItem('mb.dataset');
+      const f = localStorage.getItem('mb.format');
+      const bd= localStorage.getItem('mb.bulkDataset');
+      const bf= localStorage.getItem('mb.bulkFormat');
+      if (d) singleDataset.value = d;
+      if (f) singleFormat.value  = f;
+      if (bd) bulkDataset.value  = bd;
+      if (bf) bulkFormat.value   = bf;
+    }
+    loadPrefs();
+    [singleDataset,singleFormat,bulkDataset,bulkFormat].forEach(el => el.addEventListener('change', savePrefs));
+
+    // --- Single: locate->convert
+    async function locate(assetId, dataset) {
       const r = await fetch('/api/locate', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ assetId, dataset })
       });
-      if(!r.ok){
-        let msg = `Locate failed (HTTP ${r.status})`;
-        try{ const j = await r.json(); if(j?.error) msg = j.error; } catch {}
-        throw new Error(msg);
-      }
+      if (!r.ok) throw new Error(`Locate failed (HTTP ${r.status})`);
       return r.json();
     }
 
-    async function convertSingle({assetId, dataset, format}){
-      const r = await fetch('/api/convert',{
-        method:'POST', headers:{'Content-Type':'application/json'},
+    async function convert(assetId, dataset, format) {
+      const r = await fetch('/api/convert', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ assetId, dataset, format })
       });
-      if(!r.ok){
+      if (!r.ok) {
         let msg = `Request failed (HTTP ${r.status})`;
-        try{ const j = await r.json(); if(j?.error) msg = j.error; } catch {}
+        try { const err = await r.json(); if (err?.error) msg = err.error; } catch {}
         throw new Error(msg);
       }
       return r.blob();
     }
 
-    async function convertBulk({items, defaultDataset, format}){
-      const r = await fetch('/api/bulk',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ items, defaultDataset, format })
-      });
-      if(!r.ok){
-        let msg = `Request failed (HTTP ${r.status})`;
-        try{ const j = await r.json(); if(j?.error) msg = j.error; } catch {}
-        throw new Error(msg);
-      }
-      return r.blob();
-    }
+    singleGo.onclick = async () => {
+      const asset   = singleAsset.value.trim();
+      const dataset = singleDataset.value;
+      const format  = singleFormat.value; // 'kml' | 'geojson' | 'shapefile'
+      if (!asset) { singleStatus.textContent = 'Please enter an Asset / BMP ID.'; return; }
 
-    // ---- Single: locate + download + copy link ------------------------------
-    const assetEl = $('#asset');
-    const btnDownload = $('#btnDownload');
+      singleGo.disabled = true;
+      singleStatus.textContent = 'Locating…';
+      linkRow.classList.add('hidden');
 
-    async function doSingle(){
-      const assetId = assetEl.value.trim();
-      const dataset = datasetEl.value;
-      const format  = formatEl.value;
-      if(!assetId) return;
-
-      btnDownload.disabled = true;
-      btnCopy.disabled = true;
-      mapsRow.hidden = true;
-
-      try{
-        // 1) locate for maps
-        const info = await locate(assetId, dataset);
-        if(info?.googleMapsUrl){
-          mapsLinkEl.href = info.googleMapsUrl;
-          mapsRow.hidden = false;
-          btnCopy.disabled = false;
-          if(info?.centroid){
-            const {lat,lng} = info.centroid;
-            coordsEl.textContent = `lat ${(+lat).toFixed(6)}, lng ${(+lng).toFixed(6)}`;
-          } else {
-            coordsEl.textContent = '';
+      try {
+        const info = await locate(asset, dataset);
+        if (info?.googleMapsUrl) {
+          mapsLink.href = info.googleMapsUrl;
+          linkRow.classList.remove('hidden');
+          copyLinkBtn.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(info.googleMapsUrl);
+              singleStatus.textContent = 'Copied Google Maps link.';
+            } catch { singleStatus.textContent = 'Copy failed.'; }
           }
         }
-
-        // 2) download file
-        const blob = await convertSingle({assetId, dataset, format});
-        const ext = format === 'kml' ? 'kml' : (format === 'geojson' ? 'geojson' : 'zip');
-        const url = URL.createObjectURL(blob);
-        const a = Object.assign(document.createElement('a'), {href:url, download: `${assetId}.${ext}`});
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
-      }catch(e){
-        alert(e.message || 'Conversion failed');
-      }finally{
-        btnDownload.disabled = false;
+        singleStatus.textContent = 'Converting…';
+        const blob = await convert(asset, dataset, format);
+        const ext  = (format === 'kml') ? 'kml' : (format === 'geojson') ? 'geojson' : 'zip';
+        downloadBlob(`${asset}.${ext}`, blob);
+        singleStatus.textContent = 'Done.';
+      } catch (e) {
+        singleStatus.textContent = e.message || 'Error';
+      } finally {
+        singleGo.disabled = false;
       }
+    };
+
+    // --- Bulk: CSV handling & POST /api/bulk
+    bulkFileBtn.onclick = () => bulkFile.click();
+    bulkFile.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      document.getElementById('bulkText').value = text.trim();
+    };
+
+    function parseCsvToItems(text, defaultDataset) {
+      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (lines.length === 0) return [];
+      // Check for header by looking for non-ID words in first row
+      const first = lines[0].split(',').map(s => s.trim());
+      let start = 0;
+      if (first[0].toLowerCase().includes('asset')) start = 1;
+
+      const items = [];
+      for (let i=start; i<lines.length; i++) {
+        const cols = lines[i].split(',').map(s => s.trim()).filter(c => c.length);
+        if (!cols.length) continue;
+        const assetId = cols[0];
+        const dataset = (cols[1] && cols[1] !== '-') ? cols[1] : defaultDataset;
+        if (assetId) items.push({ assetId, dataset });
+      }
+      return items;
     }
-    btnDownload.onclick = doSingle;
-    assetEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter') doSingle(); });
 
-    btnCopy.onclick = async ()=>{
-      try{
-        await navigator.clipboard.writeText(mapsLinkEl.href);
-        btnCopy.textContent = 'Copied!';
-        setTimeout(()=>btnCopy.textContent='Copy link',1200);
-      }catch{
-        // ignore
-      }
-    };
-
-    // ---- Bulk: CSV parse + upload + download --------------------------------
-    const bulkText = $('#bulkText');
-    const bulkFile = $('#bulkFile');
-    const bulkStatus = $('#bulkStatus');
-    const btnBulk = $('#btnBulk');
-
-    bulkFile.onchange = async (e)=>{
-      const f = e.target.files?.[0];
-      if(!f) return;
-      const text = await f.text();
-      bulkText.value = text;
-    };
-
-    function parseRows(text){
-      // Accept: assetId   OR   assetId,dataset
-      return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{
-        const parts = l.split(',').map(s=>s.trim()).filter(Boolean);
-        return parts.length>1 ? {assetId:parts[0], dataset:parts[1]} : {assetId:parts[0]};
+    async function bulkConvert(payload) {
+      const r = await fetch('/api/bulk', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
       });
+      if (!r.ok) {
+        let msg = `Bulk failed (HTTP ${r.status})`;
+        try { const err = await r.json(); if (err?.error) msg = err.error; } catch {}
+        throw new Error(msg);
+      }
+      return r.blob();
     }
 
-    btnBulk.onclick = async ()=>{
-      const items = parseRows(bulkText.value);
-      if(items.length===0){ bulkStatus.textContent='Paste or upload some IDs first.'; return; }
-      bulkStatus.textContent='Preparing…';
-      btnBulk.disabled = true;
-      try{
-        const blob = await convertBulk({
+    bulkGo.onclick = async () => {
+      const text = bulkText.value.trim();
+      if (!text) { bulkStatus.textContent = 'Paste or upload a CSV first.'; return; }
+      const defaultDataset = bulkDataset.value;
+      const fmt = bulkFormat.value; // 'kmlzip'|'geojsonzip'|'shpzip'
+
+      const items = parseCsvToItems(text, defaultDataset);
+      if (items.length === 0) { bulkStatus.textContent = 'No parsable rows found.'; return; }
+
+      bulkGo.disabled = true;
+      bulkStatus.textContent = `Processing ${items.length} item(s)…`;
+      try {
+        const blob = await bulkConvert({
           items,
-          defaultDataset: bulkDatasetEl.value,
-          format: bulkFormatEl.value
+          defaultDataset,
+          format: fmt
         });
-        const url = URL.createObjectURL(blob);
-        const name = (bulkFormatEl.value==='kmlzip' ? 'mapbuddy_kml.zip'
-                      : bulkFormatEl.value==='geojsonzip' ? 'mapbuddy_geojson.zip'
-                      : 'mapbuddy_shapefile.zip');
-        const a = Object.assign(document.createElement('a'), {href:url, download: name});
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
-        bulkStatus.textContent='Done.';
-      }catch(e){
-        bulkStatus.textContent = e.message || 'Bulk conversion failed.';
-      }finally{
-        btnBulk.disabled = false;
+        const name = (fmt === 'kmlzip') ? 'mapbuddy_kml.zip'
+                   : (fmt === 'geojsonzip') ? 'mapbuddy_geojson.zip'
+                   : 'mapbuddy_shapefile.zip';
+        downloadBlob(name, blob);
+        bulkStatus.textContent = 'Done.';
+      } catch (e) {
+        bulkStatus.textContent = e.message || 'Error';
+      } finally {
+        bulkGo.disabled = false;
       }
     };
 
-    // auto-save the CSV text between visits
-    bulkText.value = load('bulk_text','');
-    bulkText.oninput = ()=>save('bulk_text', bulkText.value);
+    // Start on Single
+    setTab(true);
   </script>
 </body>
 </html>
