@@ -45,6 +45,7 @@
       .drop input{display:none} .drop strong{color:var(--ink)}
       .maps{margin-top:10px; font-size:14px} .maps a{color:var(--accent); font-weight:800; text-decoration:none} .maps a:hover{text-decoration:underline}
       .okay{color:#128a43; font-weight:700} .err{color:#b10e3b; font-weight:700}
+      .sep{margin:0 8px; color:#8aa;}
     </style>
   </head>
   <body>
@@ -139,10 +140,9 @@ LOD_12345,mdsha_landscape"></textarea>
               <div style="margin-top:14px;">
                 <label>FORMAT</label>
                 <select id="format-bulk">
-                  <option value="kml_zip">KML (.zip)</option>
-                  <option value="geojson_zip">GeoJSON (.zip)</option>
-                  <option value="shp_zip">Shapefile (.zip)</option>
-                  <option value="maps_csv">Google Maps CSV (.csv)</option>
+                  <option value="kmlzip">KML (.zip)</option>
+                  <option value="geojsonzip">GeoJSON (.zip)</option>
+                  <option value="shpzip">Shapefile (.zip)</option>
                 </select>
               </div>
 
@@ -223,7 +223,7 @@ LOD_12345,mdsha_landscape"></textarea>
         return r.json();
       }
 
-      // Single: Download geodata & show maps link (plus CSV)
+      // Single: Download geodata & show maps link with "Copy link"
       async function downloadSingle() {
         const asset = assetEl.value.trim();
         const dataset = dsEl.value;
@@ -237,11 +237,31 @@ LOD_12345,mdsha_landscape"></textarea>
           if (info?.googleMapsUrl) {
             mapsEl.innerHTML = `
               <a href="${info.googleMapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>
-              · <a href="#" id="dlCsvMap">Download CSV</a>
+              <span class="sep">•</span>
+              <a href="#" id="copyLink">Copy link</a>
               ${info?.centroid ? ` <span class="hint">· lat ${info.centroid.lat.toFixed(6)}, lng ${info.centroid.lng.toFixed(6)}</span>` : ''}
             `;
-            const aCsv=document.getElementById('dlCsvMap');
-            aCsv.addEventListener('click', (e)=>{ e.preventDefault(); downloadSingleMapCsv(asset, info.googleMapsUrl); });
+            const copy = document.getElementById('copyLink');
+            copy.addEventListener('click', async (e) => {
+              e.preventDefault();
+              try {
+                if (navigator.clipboard?.writeText) {
+                  await navigator.clipboard.writeText(info.googleMapsUrl);
+                } else {
+                  const ta = document.createElement('textarea');
+                  ta.value = info.googleMapsUrl;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(ta);
+                }
+                const old = statusEl.textContent;
+                statusEl.textContent = 'Link copied!';
+                setTimeout(() => { if (statusEl.textContent === 'Link copied!') statusEl.textContent = old; }, 1200);
+              } catch {
+                statusEl.textContent = 'Could not copy link.';
+              }
+            });
           }
 
           statusEl.textContent='Converting…';
@@ -268,16 +288,6 @@ LOD_12345,mdsha_landscape"></textarea>
         }
       }
 
-      function downloadSingleMapCsv(assetId, url){
-        const esc=s=>`"${String(s??'').replace(/"/g,'""')}"`;
-        const csv = `assetId,googleMapsUrl\n${esc(assetId)},${esc(url)}\n`;
-        const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-        const dl=URL.createObjectURL(blob);
-        const a=document.createElement('a'); a.href=dl; a.download=`${assetId}_map.csv`;
-        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(dl);
-      }
-
-      // Bulk parsing
       function parseCsv(text){
         const rows=[], lines=(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
         if(!lines.length) return rows;
@@ -292,55 +302,13 @@ LOD_12345,mdsha_landscape"></textarea>
         return rows;
       }
 
-      // Bulk: Google Maps CSV (client-side)
-      async function downloadBulkMapsCsv(items, defaultDataset){
-        bulkStatus.textContent='Building Google Maps CSV…';
-        const esc=s=>`"${String(s??'').replace(/"/g,'""')}"`;
-        const rows=[['assetId','googleMapsUrl']];
-
-        // concurrency limiter
-        const limit=6; let idx=0;
-        const out=new Array(items.length);
-        async function worker(){
-          while(idx<items.length){
-            const i=idx++; const it=items[i];
-            const assetId=it.assetId; const dataset=it.dataset||defaultDataset;
-            try{
-              const info=await locate(assetId, dataset);
-              out[i]=[assetId, info?.googleMapsUrl||''];
-            }catch{
-              out[i]=[assetId, ''];
-            }
-          }
-        }
-        await Promise.all(Array.from({length:Math.min(limit, items.length)}, worker));
-        out.forEach(r=>{ if(r) rows.push(r); });
-
-        const csv = rows.map(r=>r.map(esc).join(',')).join('\n') + '\n';
-        const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-        const url=URL.createObjectURL(blob);
-        const a=document.createElement('a'); a.href=url; a.download='mapbuddy_maps.csv';
-        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-        bulkStatus.textContent=''; document.getElementById('bulk-done').style.display='';
-      }
-
-      // Bulk: geodata via /api/bulk
       async function downloadBulk(){
         const items=parseCsv(csvEl.value);
-        const format=fmtBulkEl.value;
+        const format=fmtBulkEl.value;          // "kmlzip" | "geojsonzip" | "shpzip"
         const defaultDataset=defaultDsEl.value;
 
         bulkStatus.textContent=''; bulkDone.style.display='none';
         if(!items.length){ bulkStatus.innerHTML='<span class="err">Paste or upload a CSV first.</span>'; return; }
-
-        // special path: Google Maps CSV
-        if(format==='maps_csv'){
-          bulkBtn.disabled=true;
-          try{ await downloadBulkMapsCsv(items, defaultDataset); }
-          catch(err){ bulkStatus.innerHTML=`<span class="err">${err.message||'Error'}</span>`; }
-          finally{ bulkBtn.disabled=false; }
-          return;
-        }
 
         bulkBtn.disabled=true; bulkStatus.textContent='Building zip…';
         try{
@@ -357,7 +325,7 @@ LOD_12345,mdsha_landscape"></textarea>
           const blob=await resp.blob();
           const url=URL.createObjectURL(blob);
           const a=document.createElement('a');
-          a.download = format.startsWith('kml')?'mapbuddy_kml.zip':format.startsWith('geojson')?'mapbuddy_geojson.zip':'mapbuddy_shapefile.zip';
+          a.download = format==='kmlzip'?'mapbuddy_kml.zip':format==='geojsonzip'?'mapbuddy_geojson.zip':'mapbuddy_shapefile.zip';
           a.href=url; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
           bulkStatus.textContent=''; bulkDone.style.display='';
         }catch(err){
