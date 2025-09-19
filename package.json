@@ -6,7 +6,7 @@
   "dependencies": {
     "axios": "^1.7.2",
     "mapshaper": "^0.6.64",
-    "pdf-lib": "^1.17.1",
-    "qrcode": "^1.5.3"
+    "@napi-rs/canvas": "^0.1.53",
+    "pdf-lib": "^1.17.1"
   }
 }
