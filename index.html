@@ -242,10 +242,12 @@
 
   <!-- Logic -->
   <script>
-    /* Change this if your API is served from a subpath like '/mapbuddy' */
-    const API_BASE = '';
+    /* Auto-detect API base. If your app lives under /mapbuddy this will pick it up. */
+    const API_BASE = (window.__MAPBUDDY_API_BASE !== undefined)
+      ? window.__MAPBUDDY_API_BASE
+      : (location.pathname.includes('/mapbuddy') ? '/mapbuddy' : '');
 
-    /* UI value -> server dataset key */
+    /* UI dataset -> server key */
     const DATASET_KEY_MAP = {
       fairfax: 'fairfax_bmps',
       mdsha_tmdl_scs: 'mdsha_tmdl_scs',
@@ -256,7 +258,6 @@
       mdsha_tmdl_outfall: 'mdsha_tmdl_outfall',
       mdsha_managed_landscape: 'mdsha_managed_landscape'
     };
-
     const DATASET_TEXT_MAP = {
       'Fairfax — Stormwater Facilities (FACILITY_ID)': 'fairfax_bmps',
       'TMDL — Stormwater Control Structures': 'mdsha_tmdl_scs',
@@ -268,17 +269,15 @@
       'MDOT SHA — Managed Landscape (LOD_ID)': 'mdsha_managed_landscape'
     };
 
+    /* Only endpoints we know exist */
     const SINGLE_ENDPOINTS = [
       `${API_BASE}/api/single`,
       `${API_BASE}/api/download`,
-      `${API_BASE}/api/convert`,
-      `${API_BASE}/api/asset`
+      `${API_BASE}/api/convert`
     ];
     const BULK_ENDPOINTS = [
-      `${API_BASE}/api/bulk-one`,
       `${API_BASE}/api/bulk`,
-      `${API_BASE}/api/convert/bulk`,
-      `${API_BASE}/api/download/bulk`
+      `${API_BASE}/api/convert/bulk`
     ];
     const LINK_ENDPOINTS = [
       `${API_BASE}/api/link`,
@@ -325,15 +324,15 @@
       return val || txt;
     }
 
-    /* format mapping with wide fallbacks */
+    /* MD-SHA prefers zipped outputs; try those first */
     function mdshaCandidates(uiFmt){
-      if (uiFmt === 'kml')       return ['kml','kmlzip'];
-      if (uiFmt === 'shapefile') return ['shapefile','shpzip'];
+      if (uiFmt === 'kml')       return ['kmlzip','kml'];
+      if (uiFmt === 'shapefile') return ['shpzip','shapefile'];
       if (uiFmt === 'geojson')   return ['geojson'];
       return [uiFmt];
     }
     function nonMdshaFmt(uiFmt){
-      if (uiFmt === 'shapefile') return 'shpzip'; // server usually zips
+      if (uiFmt === 'shapefile') return 'shpzip';
       return uiFmt;
     }
 
@@ -359,7 +358,7 @@
       });
       if (!res.ok) {
         const text = await res.text().catch(()=> '');
-        throw new Error(`${url} → ${res.status} ${res.statusText} ${text || ''}`.trim());
+        throw new Error(`${url.replace(location.origin,'')} → ${res.status} ${res.statusText}${text ? '  ' + text : ''}`);
       }
       return { res, blob: await res.blob() };
     }
@@ -369,12 +368,12 @@
         headers:{ 'Content-Type':'application/json', 'Accept':'application/json,text/plain,*/*' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error(`${url} → ${res.status}`);
+      if (!res.ok) throw new Error(`${url.replace(location.origin,'')} → ${res.status}`);
       return res.text();
     }
     async function getJSON(url){
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`${url} → ${res.status}`);
+      if (!res.ok) throw new Error(`${url.replace(location.origin,'')} → ${res.status}`);
       return res.json();
     }
 
@@ -411,6 +410,11 @@
     bulkFormats.forEach(cb => cb.addEventListener('change', bulkReady));
 
     /* CSV upload */
+    const csvArea = document.getElementById('csvUploadArea');
+    const csvFileInput = document.getElementById('csvFileInput');
+    const chooseCsvBtn = document.getElementById('chooseCsvBtn');
+    const csvMeta = document.getElementById('csvMeta');
+
     chooseCsvBtn.addEventListener('click', () => csvFileInput.click());
     csvArea.addEventListener('dragover', e => { e.preventDefault(); csvArea.classList.add('bg-blue-50'); });
     csvArea.addEventListener('dragleave', () => csvArea.classList.remove('bg-blue-50'));
@@ -447,12 +451,12 @@
       return out;
     }
 
-    /* SINGLE via bulk-one for MD-SHA with multi-format/field fallbacks */
-    async function singleViaBulkOne(assetId, dsKey, uiFmt){
-      const fmtCandidates = mdshaCandidates(uiFmt);
+    /* SINGLE via bulk (MD-SHA) */
+    async function singleViaBulk(assetId, dsKey, uiFmt){
+      const fmtCandidates = mdshaCandidates(uiFmt); // kmlzip→kml, shpzip→shapefile
       let lastErr;
       for (const fmt of fmtCandidates){
-        for (const ep of BULK_ENDPOINTS){
+        for (const ep of BULK_ENDPOINTS){ // only /api/bulk, /api/convert/bulk
           try{
             const payload = {
               items: [{ assetId }],
@@ -469,10 +473,10 @@
           }catch(e){ lastErr = e; }
         }
       }
-      throw lastErr || new Error('bulk-one failed');
+      throw lastErr || new Error('bulk single failed');
     }
 
-    async function singleViaSingle(assetId, dsKey, uiFmt){
+    async function singleDirect(assetId, dsKey, uiFmt){
       const fmt = nonMdshaFmt(uiFmt);
       let lastErr;
       for (const ep of SINGLE_ENDPOINTS){
@@ -493,6 +497,7 @@
 
     /* Single click */
     const singleBtnEl = document.getElementById('singleConvertBtn');
+    const googleBox = document.getElementById('googleMapsSection');
     singleBtn.addEventListener('click', async () => {
       if (singleBtn.disabled) return;
 
@@ -508,8 +513,8 @@
 
       try{
         for (const uiFmt of formats){
-          if (isMdsha(dsKey)) await singleViaBulkOne(assetId, dsKey, uiFmt);
-          else                await singleViaSingle(assetId, dsKey, uiFmt);
+          if (isMdsha(dsKey)) await singleViaBulk(assetId, dsKey, uiFmt);
+          else                await singleDirect(assetId, dsKey, uiFmt);
         }
 
         currentGoogleLink = await buildGoogleLink(assetId, dsKey);
@@ -530,6 +535,7 @@
     });
 
     /* BULK */
+    const bulkBtnEl = document.getElementById('bulkConvertBtn');
     bulkBtn.addEventListener('click', async () => {
       if (bulkBtn.disabled) return;
 
@@ -580,7 +586,7 @@
 
     /* Google Maps link (prefers lat/lng) */
     async function buildGoogleLink(assetId, datasetKey){
-      // 1) explicit link API
+      // Endpoint that returns a URL (if present in your API)
       for (const ep of LINK_ENDPOINTS){
         try{
           const url = `${ep}?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`;
@@ -588,8 +594,7 @@
           if (json && json.url) return json.url;
         }catch(e){}
       }
-
-      // 2) try SINGLE geojson (works for Fairfax)
+      // Fallback 1: request GeoJSON for the single feature
       for (const ep of SINGLE_ENDPOINTS){
         try{
           const payload = { assetId, dataset: datasetKey, datasetKey: datasetKey, format: 'geojson', silent: true };
@@ -599,8 +604,7 @@
           if (ll){ const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`; }
         }catch(e){}
       }
-
-      // 3) MD SHA: try BULK geojson for one item (some stacks return JSON body for one feature)
+      // Fallback 2: if MD-SHA, try bulk for single item
       if (isMdsha(datasetKey)){
         for (const ep of BULK_ENDPOINTS){
           try{
@@ -610,14 +614,11 @@
               const gj = JSON.parse(txt);
               const ll = centroidFromGeoJSON(gj);
               if (ll){ const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`; }
-            }catch(parseErr){
-              // If it was a zip, parsing fails; fall through.
-            }
+            }catch(_) {}
           }catch(e){}
         }
       }
-
-      // 4) fallback: plain query
+      // Final fallback: text search
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + ' ' + datasetKey)}`;
     }
 
