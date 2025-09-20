@@ -97,6 +97,10 @@
                 <input type="checkbox" name="format" value="kml" class="mr-3 text-map-blue">
                 <span class="text-sm font-medium">🗺️ KML</span>
               </label>
+              <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-green transition-colors">
+                <input type="checkbox" name="format" value="geojson" class="mr-3 text-map-green">
+                <span class="text-sm font-medium">📊 GeoJSON</span>
+              </label>
               <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-orange transition-colors">
                 <input type="checkbox" name="format" value="shapefile" class="mr-3 text-map-orange">
                 <span class="text-sm font-medium">🗃️ Shapefile (.zip)</span>
@@ -253,7 +257,7 @@
       mdsha_managed_landscape: 'mdsha_managed_landscape'
     };
 
-    /* Some deployments feed the visible label instead of value — cover both. */
+    /* Sometimes the visible label comes through — map those too */
     const DATASET_TEXT_MAP = {
       'Fairfax — Stormwater Facilities (FACILITY_ID)': 'fairfax_bmps',
       'TMDL — Stormwater Control Structures': 'mdsha_tmdl_scs',
@@ -319,7 +323,7 @@
       const txt = (opt?.text || '').trim();
       if (DATASET_KEY_MAP[val]) return DATASET_KEY_MAP[val];
       if (DATASET_TEXT_MAP[txt]) return DATASET_TEXT_MAP[txt];
-      return val || txt; // last resort (lets power users pass raw keys)
+      return val || txt;
     }
 
     function uiToServerFormat(uiFmt, dsKey){
@@ -428,21 +432,29 @@
       return out;
     }
 
-    /* single -> use bulk-one for MD SHA */
+    /* SINGLE: MD SHA => bulk-one with format fallbacks */
     async function singleViaBulkOne(assetId, dsKey, uiFmt){
-      const fmt = uiToServerFormat(uiFmt, dsKey);
+      const initial = uiToServerFormat(uiFmt, dsKey);
+      const candidates =
+        initial === 'kmlzip'  ? ['kmlzip','kml'] :
+        initial === 'shpzip'  ? ['shpzip','shapefile'] :
+        /* geojson stays geojson */ ['geojson'];
+
       let lastErr;
-      for (const ep of BULK_ENDPOINTS){
-        try{
-          const payload = { items:[{assetId}], defaultDataset: dsKey, format: fmt };
-          const { res, blob } = await postBinary(ep, payload);
-          const name = suggestedFilename(res, `${assetId}_${fmt}.zip`);
-          saveBlob(blob, name);
-          return;
-        }catch(e){ lastErr = e; }
+      for (const fmt of candidates){
+        for (const ep of BULK_ENDPOINTS){
+          try{
+            const payload = { items:[{assetId}], defaultDataset: dsKey, format: fmt };
+            const { res, blob } = await postBinary(ep, payload);
+            const name = suggestedFilename(res, `${assetId}_${fmt}.zip`);
+            saveBlob(blob, name);
+            return;
+          }catch(e){ lastErr = e; }
+        }
       }
       throw lastErr || new Error('bulk-one failed');
     }
+
     async function singleViaSingle(assetId, dsKey, uiFmt){
       const fmt = uiToServerFormat(uiFmt, dsKey);
       let lastErr;
@@ -451,6 +463,7 @@
           const payload = { assetId, dataset: dsKey, format: fmt };
           const { res, blob } = await postBinary(ep, payload);
           const outName = fmt==='kml' ? `${assetId}.kml`
+                         : fmt==='geojson' ? `${assetId}.geojson`
                          : fmt==='shpzip' ? `${assetId}.zip`
                          : `${assetId}.${fmt}`;
           const name = suggestedFilename(res, outName);
@@ -460,6 +473,9 @@
       }
       throw lastErr || new Error('single failed');
     }
+
+    const datasetSelectEl = document.getElementById('datasetSelect');
+    const singleBtnEl     = document.getElementById('singleConvertBtn');
 
     singleBtn.addEventListener('click', async () => {
       if (singleBtn.disabled) return;
@@ -488,7 +504,7 @@
         singleBtn.classList.add('from-green-500','to-green-600');
         enable(singleBtn, true);
       }catch(err){
-        console.error(err);
+        console.error('Single failed:', err);
         alert('Single conversion failed. Please retry.');
         singleBtn.textContent = 'Generate Map Files';
         singleBtn.classList.remove('from-green-500','to-green-600');
@@ -497,7 +513,7 @@
       }
     });
 
-    /* bulk */
+    /* BULK */
     bulkBtn.addEventListener('click', async () => {
       if (bulkBtn.disabled) return;
 
@@ -528,7 +544,7 @@
         bulkBtn.classList.add('from-green-500','to-green-600');
         enable(bulkBtn, true);
       }catch(err){
-        console.error(err);
+        console.error('Bulk failed:', err);
         alert('Bulk conversion failed. Please retry.');
         bulkBtn.textContent = 'Process Bulk Conversion';
         bulkBtn.classList.remove('from-green-500','to-green-600');
@@ -537,9 +553,9 @@
       }
     });
 
-    /* Google Maps link */
+    /* Google Maps link (prefers true lat/lng) */
     async function buildGoogleLink(assetId, datasetKey){
-      // 1) dedicated link endpoints if present
+      // 1) explicit link API
       for (const ep of LINK_ENDPOINTS){
         try{
           const url = `${ep}?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`;
@@ -547,7 +563,8 @@
           if (json && json.url) return json.url;
         }catch(e){}
       }
-      // 2) try single → geojson (Fairfax works)
+
+      // 2) try SINGLE geojson (works for Fairfax)
       for (const ep of SINGLE_ENDPOINTS){
         try{
           const payload = { assetId, dataset: datasetKey, format: 'geojson', silent: true };
@@ -557,8 +574,28 @@
           if (ll){ const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`; }
         }catch(e){}
       }
-      return null;
+
+      // 3) MD SHA: try BULK geojson for one item and hope for JSON body
+      if (isMdsha(datasetKey)){
+        for (const ep of BULK_ENDPOINTS){
+          try{
+            const payload = { items:[{assetId}], defaultDataset: datasetKey, format: 'geojson' };
+            const txt = await postForText(ep, payload);
+            try{
+              const gj = JSON.parse(txt);
+              const ll = centroidFromGeoJSON(gj);
+              if (ll){ const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`; }
+            }catch(parseErr){
+              // If it's a zip, we can't parse here; fall through.
+            }
+          }catch(e){}
+        }
+      }
+
+      // 4) fallback: plain query (last resort)
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + ' ' + datasetKey)}`;
     }
+
     function centroidFromGeoJSON(gj){
       let g = gj;
       if (g.type === 'Feature') g = g.geometry;
@@ -579,6 +616,9 @@
     /* expose for buttons */
     window.copyGoogleMapsLink = function(){ if(!currentGoogleLink) return; navigator.clipboard.writeText(currentGoogleLink).then(()=>alert('Google Maps link copied!')); };
     window.openGoogleMaps = function(){ if(!currentGoogleLink) return; window.open(currentGoogleLink,'_blank','noopener,noreferrer'); };
+
+    /* initial state */
+    (function init(){ singleReady(); bulkReady(); })();
   </script>
 </body>
 </html>
