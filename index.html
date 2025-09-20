@@ -17,6 +17,9 @@
     .btn-grad { background-image: linear-gradient(90deg, #2563eb 0%, #059669 100%); }
     .btn-grad:hover { filter: brightness(1.05); }
     .card { box-shadow: 0 10px 30px rgba(2,6,23,.05); }
+    .tab-active { color: white; background-image: linear-gradient(90deg, #2563eb 0%, #059669 100%); }
+    .tab-idle { color: rgb(71 85 105); }
+    .hidden-important { display: none !important; }
   </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen text-slate-900">
@@ -25,7 +28,7 @@
       <div class="flex items-center justify-between py-5">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-lg bg-gradient-to-r from-map-blue to-map-green grid place-items-center">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
             </svg>
           </div>
@@ -49,8 +52,8 @@
     <div class="max-w-6xl mx-auto">
       <div class="flex justify-center mb-8">
         <div class="bg-white rounded-xl p-2 card flex gap-2">
-          <button id="singleModeBtn" class="pill px-6 py-3 font-medium text-white btn-grad">Single Convert</button>
-          <button id="bulkModeBtn" class="pill px-6 py-3 font-medium text-slate-600 hover:text-slate-900">Bulk Convert</button>
+          <button id="singleModeBtn" class="pill px-6 py-3 font-medium tab-active">Single Convert</button>
+          <button id="bulkModeBtn"  class="pill px-6 py-3 font-medium tab-idle hover:text-slate-900">Bulk Convert</button>
         </div>
       </div>
 
@@ -118,7 +121,7 @@
         </div>
       </div>
 
-      <!-- BULK (kept intact) -->
+      <!-- BULK -->
       <div id="bulkMode" class="bg-white rounded-2xl p-8 card hidden">
         <h3 class="text-2xl font-bold text-center mb-8">Bulk Asset Conversion</h3>
 
@@ -189,13 +192,29 @@
     © 2025 MapBuddy · Simple, reliable asset-to-map conversion.
   </footer>
 
- <script>
+<script>
   // ---------- tiny helpers ----------
   const $ = (id) => document.getElementById(id);
   const API_CONVERT = "/api/convert";
   const API_BULK = "/api/bulk";
 
-  const norm = (s) => (s || "").toString().trim().toUpperCase();
+  const normUpper = (s) => (s || "").toString().trim().toUpperCase();
+  const stripNonPrintable = (s) => s.replace(/[^\x20-\x7E]/g, "");
+  const isTmdlDataset = (ds) => /^tmdl_/i.test(ds) || ds === "mdsha_lod";
+
+  // Normalize IDs (important for TMDL / SHA)
+  function normalizeIdForDataset(id, dataset) {
+    let x = stripNonPrintable(id || "");
+    x = x.trim();
+    if (isTmdlDataset(dataset)) {
+      // SHA-style strict: uppercase, remove inner spaces/dashes
+      x = x.toUpperCase().replace(/[\s-]+/g, "");
+    } else {
+      // Fairfax etc.
+      x = x.toUpperCase().replace(/\s+/g, "");
+    }
+    return x;
+  }
 
   function downloadBlobAs(blob, filename) {
     const a = document.createElement("a");
@@ -207,28 +226,61 @@
     URL.revokeObjectURL(a.href);
   }
 
-  // ---------- Enable/disable Single button (soft validation exactly like before) ----------
+  // ---------- UI Toggle ----------
+  function setMode(mode) {
+    const singleActive = mode === "single";
+    $("singleMode").classList.toggle("hidden", !singleActive);
+    $("bulkMode").classList.toggle("hidden", singleActive);
+
+    $("singleModeBtn").classList.toggle("tab-active", singleActive);
+    $("singleModeBtn").classList.toggle("tab-idle", !singleActive);
+    $("bulkModeBtn").classList.toggle("tab-active", !singleActive);
+    $("bulkModeBtn").classList.toggle("tab-idle", singleActive);
+  }
+  $("singleModeBtn")?.addEventListener("click", () => setMode("single"));
+  $("bulkModeBtn")?.addEventListener("click",  () => setMode("bulk"));
+
+  // ---------- Hints ----------
+  function refreshHints() {
+    const ds = $("singleDataset").value;
+    const hint = $("singleHint");
+    const warn = $("singleWarn");
+    hint.textContent = "";
+    warn.textContent = "";
+    if (!ds) return;
+
+    if (ds === "fairfax_bmps") {
+      hint.textContent = "Fairfax: Use FACILITY_ID (e.g., WP0399). No spaces.";
+    } else if (isTmdlDataset(ds)) {
+      hint.textContent = "MD SHA TMDL: Use the official ID (e.g., 210049UT). We'll auto-normalize by uppercasing and removing spaces/dashes.";
+      warn.textContent = "If the exact feature isn't found, double-check the TMDL source table ID.";
+    }
+  }
+
+  // ---------- Enable/disable Single button ----------
   function enableSingle() {
-    const hasDataset = $("singleDataset").value;
-    const hasId = !!norm($("singleAsset").value);
+    const ds = $("singleDataset").value;
+    const idRaw = $("singleAsset").value;
+    const hasDataset = !!ds;
+    const hasId = !!normalizeIdForDataset(idRaw, ds);
     const anyFmt = $("fmtKmlSingle").checked || $("fmtGeoSingle").checked || $("fmtShpSingle").checked;
     $("singleRunBtn").disabled = !(hasDataset && hasId && anyFmt);
   }
   ["singleDataset","singleAsset","fmtKmlSingle","fmtGeoSingle","fmtShpSingle"].forEach(id=>{
-    $(id)?.addEventListener("input", enableSingle);
-    $(id)?.addEventListener("change", enableSingle);
+    $(id)?.addEventListener("input", ()=>{ refreshHints(); enableSingle(); });
+    $(id)?.addEventListener("change", ()=>{ refreshHints(); enableSingle(); });
   });
 
-  // ---------- SINGLE (exactly yesterday’s contract) ----------
+  // ---------- SINGLE ----------
   async function runSingle() {
     if ($("singleRunBtn").disabled) return;
 
-    const dataset = $("singleDataset").value;                // e.g. "fairfax_bmps", "tmdl_trees"
-    const assetId = norm($("singleAsset").value);            // e.g. "WP0399" or "210049UT"
+    const dataset = $("singleDataset").value;
+    const assetId = normalizeIdForDataset($("singleAsset").value, dataset);
     const formats = [];
     if ($("fmtKmlSingle").checked) formats.push("kml");
     if ($("fmtGeoSingle").checked) formats.push("geojson");
-    if ($("fmtShpSingle").checked) formats.push("shpzip");   // single was working with shpzip
+    if ($("fmtShpSingle").checked) formats.push("shpzip");
 
     $("singleRunBtn").disabled = true;
     $("singleRunBtn").textContent = "Generating Files…";
@@ -236,21 +288,17 @@
 
     try {
       for (const fmt of formats) {
+        const body = { assetId, dataset, defaultDataset: dataset, format: fmt };
         const res = await fetch(API_CONVERT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            assetId,
-            dataset,             // backend dataset key
-            defaultDataset: dataset,
-            format: fmt          // "kml" | "geojson" | "shpzip"
-          })
+          body: JSON.stringify(body)
         });
 
         if (!res.ok) {
           let detail = "";
           try { detail = JSON.stringify(await res.json()); } catch {}
-          throw new Error(`/api/convert → ${res.status} ${detail}`);
+          throw new Error(`/api/convert → ${res.status} ${detail}\nPayload: ${JSON.stringify(body)}`);
         }
 
         const blob = await res.blob();
@@ -258,7 +306,7 @@
         downloadBlobAs(blob, `mapbuddy_${assetId}.${ext}`);
       }
 
-      // Google Maps link = stable text-search (yesterday’s approach)
+      // Stable Google Maps search link
       const gmUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + " " + dataset)}`;
       if ($("gmWrap")) {
         $("gmLinkText").textContent = gmUrl;
@@ -270,7 +318,7 @@
         $("gmWrap").classList.remove("hidden");
       }
     } catch (err) {
-      alert(`Single conversion failed. Please retry.\n\nLast error: ${err.message}`);
+      alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}`);
     } finally {
       $("singleRunBtn").textContent = "Generate Map Files";
       $("singleRunBtn").disabled = false;
@@ -278,19 +326,40 @@
   }
   $("singleRunBtn")?.addEventListener("click", runSingle);
 
-  // ---------- BULK (exactly yesterday’s contract) ----------
-  let bulkItems = []; // [{assetId:"..."}, ...]
+  // ---------- BULK ----------
+  let bulkItems = []; // [{assetId:"..."}]
+
+  function parseCsv(text) {
+    // simple CSV: split lines, split by first comma for first column
+    return text
+      .replace(/^\uFEFF/, "") // strip BOM
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+  }
+
   function attachCSV(file) {
     const reader = new FileReader();
     reader.onload = () => {
-      const lines = (reader.result || "").toString().split(/\r?\n/).map(l => l.trim());
-      const rows = lines.filter(Boolean);
-      const ids = rows.slice(1).map(r => r.split(",")[0]).map(v => (v || "").trim()).filter(Boolean);
-      bulkItems = ids.map(id => ({ assetId: id.toUpperCase() }));
-      $("loaded")?.textContent = `Loaded ${bulkItems.length} assets`;
+      const ds = $("bulkDataset").value;
+      const lines = parseCsv((reader.result || "").toString());
+      if (lines.length <= 1) {
+        $("loaded").textContent = "No rows found (need a header + at least 1 row).";
+        bulkItems = [];
+        return;
+      }
+      // First column only (header + values)
+      const ids = lines.slice(1).map(r => {
+        const first = r.split(/,(.*)/s)[0]; // take text up to first comma
+        return normalizeIdForDataset(first.replace(/^["']|["']$/g, ""), ds);
+      }).filter(Boolean);
+
+      bulkItems = ids.map(id => ({ assetId: id }));
+      $("loaded").textContent = `Loaded ${bulkItems.length} assets`;
     };
     reader.readAsText(file);
   }
+
   $("file")?.addEventListener("change", e => e.target.files?.[0] && attachCSV(e.target.files[0]));
   $("drop")?.addEventListener("click", () => $("file")?.click());
   $("drop")?.addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("border-map-blue","bg-blue-50"); });
@@ -315,6 +384,9 @@
     $("bulkRunBtn").disabled = true;
     $("bulkRunBtn").textContent = "Processing Assets…";
 
+    // Re-normalize in case dataset changed after CSV load
+    const normalized = bulkItems.map(x => ({ assetId: normalizeIdForDataset(x.assetId, dataset) }));
+
     try {
       const todo = [];
       if (wantKml) todo.push("kmlzip");
@@ -322,20 +394,24 @@
       if (wantShp) todo.push("shpzip");
 
       for (const fmt of todo) {
+        const payload = { items: normalized, defaultDataset: dataset, format: fmt };
         const res = await fetch(API_BULK, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: bulkItems,           // [{assetId: "…"}]
-            defaultDataset: dataset,    // backend dataset key
-            format: fmt                 // only kmlzip | geojsonzip | shpzip
-          })
+          body: JSON.stringify(payload)
         });
 
         if (!res.ok) {
           let detail = "";
-          try { detail = JSON.stringify(await res.json()); } catch {}
-          throw new Error(`/api/bulk → ${res.status} ${detail}`);
+          try { detail = await res.json(); } catch {}
+          const detailStr = typeof detail === "object" ? JSON.stringify(detail) : (detail || "");
+          throw new Error(`/api/bulk → ${res.status} ${detailStr}\nPayload: ${JSON.stringify(payload).slice(0, 2000)}`);
+        }
+
+        // Try to surface any server-provided misses
+        const missHeader = res.headers.get("x-missing-ids");
+        if (missHeader) {
+          alert(`Heads up: some IDs were not found by the backend:\n${missHeader}`);
         }
 
         const blob = await res.blob();
@@ -343,7 +419,7 @@
         downloadBlobAs(blob, filename);
       }
     } catch (err) {
-      alert(`Bulk conversion failed. Please retry.\n\nLast error: ${err.message}`);
+      alert(`Bulk conversion failed. Please retry.\n\nLast error:\n${err.message}`);
     } finally {
       $("bulkRunBtn").textContent = "Process Bulk Conversion";
       $("bulkRunBtn").disabled = false;
@@ -352,6 +428,8 @@
   $("bulkRunBtn")?.addEventListener("click", runBulk);
 
   // init
+  setMode("single");
+  refreshHints();
   enableSingle();
 </script>
 </body>
