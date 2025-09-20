@@ -86,7 +86,8 @@
           <!-- Asset ID -->
           <div>
             <label class="block text-sm font-semibold mb-2">Asset / BMP ID</label>
-            <input id="singleAsset" placeholder="e.g., WP0399, 210049UT" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-map-blue"/>
+            <input id="singleAsset" placeholder="e.g., 0351DP (Fairfax) or 210049UT (TMDL)" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-map-blue"/>
+            <p id="singleHint" class="text-xs text-gray-500 mt-1"></p>
           </div>
 
           <!-- Formats -->
@@ -217,13 +218,46 @@
       tmdl_outfalls: "MD SHA TMDL",
     };
 
+    // simple dataset-specific ID hints & validation
+    const HINTS = {
+      fairfax_bmps: "Fairfax IDs look like 0351DP, 0253DP (####DP).",
+      tmdl_scs: "TMDL IDs look like 210049UT (#####UT or ######UT).",
+      tmdl_retrofits: "TMDL IDs look like 210049UT (#####UT or ######UT).",
+      tmdl_trees: "TMDL IDs look like 210049UT (#####UT or ######UT).",
+      tmdl_pavement: "TMDL IDs look like 210049UT (#####UT or ######UT).",
+      tmdl_streams: "TMDL IDs look like 210049UT (#####UT or ######UT).",
+      tmdl_outfalls: "TMDL IDs look like 210049UT (#####UT or ######UT).",
+      mdsha_lod: "LOD_ID is numeric.",
+    };
+    const RE = {
+      fairfax_bmps: /^\d{4}DP$/i,
+      tmdl_generic: /^\d{5,6}UT$/i,
+      mdsha_lod: /^\d+$/i,
+    };
+
+    function showHint() {
+      const ds = $("singleDataset").value;
+      $("singleHint").textContent = HINTS[ds] || "";
+    }
+
     function normAsset(v) { return (v || "").toString().trim().toUpperCase(); }
+
+    function idLooksValid(dataset, asset) {
+      if (!dataset || !asset) return false;
+      if (dataset === "fairfax_bmps") return RE.fairfax_bmps.test(asset);
+      if (dataset === "mdsha_lod") return RE.mdsha_lod.test(asset);
+      // all TMDL groups:
+      if (dataset.startsWith("tmdl_")) return RE.tmdl_generic.test(asset);
+      return true;
+    }
 
     function enableSingleIfReady() {
       const ds = $("singleDataset").value;
       const asset = normAsset($("singleAsset").value);
       const anyFmt = $("fmtKmlSingle").checked || $("fmtGeoSingle").checked || $("fmtShpSingle").checked;
-      $("singleRunBtn").disabled = !(ds && asset && anyFmt);
+      const ok = ds && asset && anyFmt && idLooksValid(ds, asset);
+      $("singleRunBtn").disabled = !ok;
+      showHint();
     }
 
     // ---------- mode toggle ----------
@@ -242,12 +276,12 @@
       $("singleMode").classList.add("hidden");
     });
 
-    // ---------- SINGLE ----------
     ["singleDataset","singleAsset","fmtKmlSingle","fmtGeoSingle","fmtShpSingle"].forEach(id=>{
       $(id).addEventListener("input", enableSingleIfReady);
       $(id).addEventListener("change", enableSingleIfReady);
     });
 
+    // ---------- fetch helpers ----------
     async function postJSON(url, payload) {
       const res = await fetch(url, {
         method: "POST",
@@ -262,12 +296,7 @@
       return res;
     }
 
-    async function downloadSingle({assetId, dataset, format}) {
-      // /api/convert supports single items with non-zipped formats
-      const body = { assetId, dataset, defaultDataset: dataset, format };
-      const res = await postJSON("/api/convert", body);
-      const filename = res.headers.get("x-filename") || `mapbuddy_${assetId}.${format==="shpzip"?"zip":format}`;
-      const blob = await res.blob();
+    function downloadBlobAs(blob, filename) {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = filename;
@@ -275,49 +304,110 @@
       a.click();
       a.remove();
       URL.revokeObjectURL(a.href);
-      return true;
     }
 
-    async function fetchCoords(dataset, assetId) {
+    // ---------- centroid from KML / GeoJSON ----------
+    function centroidFromKmlText(xmlText) {
       try {
-        const u = `/api/coords?dataset=${encodeURIComponent(dataset)}&assetId=${encodeURIComponent(assetId)}`;
-        const r = await fetch(u);
-        if (!r.ok) return null;
-        const j = await r.json();
-        if (j && typeof j.lat === "number" && typeof j.lng === "number") return { lat:j.lat, lng:j.lng };
-        return null;
+        const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+        const nodes = Array.from(doc.getElementsByTagName("coordinates"));
+        const pts = [];
+        nodes.forEach(n => {
+          const raw = (n.textContent || "").trim();
+          raw.split(/\s+/).forEach(tok => {
+            const [lon, lat] = tok.split(",").map(Number);
+            if (isFinite(lat) && isFinite(lon)) pts.push({lat, lon});
+          });
+        });
+        if (!pts.length) return null;
+        const {lat, lon} = pts.reduce((acc,p)=>({lat:acc.lat+p.lat, lon:acc.lon+p.lon}), {lat:0,lon:0});
+        return { lat: lat/pts.length, lng: lon/pts.length };
       } catch { return null; }
     }
 
+    function centroidFromGeoJSON(jsonText) {
+      try {
+        const gj = JSON.parse(jsonText);
+        const coords = [];
+        const pushCoords = (c) => {
+          if (!c) return;
+          if (typeof c[0] === "number") {
+            const [lon,lat] = c;
+            if (isFinite(lat)&&isFinite(lon)) coords.push({lat,lon});
+          } else {
+            c.forEach(pushCoords);
+          }
+        };
+        const scan = (geom)=>{
+          if (!geom) return;
+          if (geom.type === "Point") pushCoords(geom.coordinates);
+          else if (geom.type === "MultiPoint" || geom.type === "LineString") pushCoords(geom.coordinates);
+          else if (geom.type === "MultiLineString" || geom.type === "Polygon") pushCoords(geom.coordinates);
+          else if (geom.type === "MultiPolygon") pushCoords(geom.coordinates);
+          else if (geom.type === "GeometryCollection" && Array.isArray(geom.geometries)) geom.geometries.forEach(scan);
+        };
+        if (gj.type === "FeatureCollection") gj.features?.forEach(f=>scan(f.geometry));
+        else if (gj.type === "Feature") scan(gj.geometry);
+        else scan(gj);
+        if (!coords.length) return null;
+        const {lat, lon} = coords.reduce((a,p)=>({lat:a.lat+p.lat, lon:a.lon+p.lon}), {lat:0,lon:0});
+        return { lat: lat/coords.length, lng: lon/coords.length };
+      } catch { return null; }
+    }
+
+    // ---------- SINGLE ----------
     $("singleRunBtn").addEventListener("click", async () => {
       if ($("singleRunBtn").disabled) return;
 
       const dataset = $("singleDataset").value;
       const assetId = normAsset($("singleAsset").value);
-
-      // formats for SINGLE: kml / geojson / shpzip
       const fmts = [];
       if ($("fmtKmlSingle").checked) fmts.push("kml");
       if ($("fmtGeoSingle").checked) fmts.push("geojson");
       if ($("fmtShpSingle").checked) fmts.push("shpzip");
 
+      if (!idLooksValid(dataset, assetId)) {
+        toast(`The ID "${assetId}" doesn’t match expected pattern for this dataset.\n\n${HINTS[dataset] || ""}`);
+        return;
+      }
+
       $("singleRunBtn").disabled = true;
       $("singleRunBtn").textContent = "Generating Files…";
       $("gmWrap").classList.add("hidden");
 
+      // we'll keep an optional centroid from first convertible format
+      let bestCoords = null;
+
       try {
-        // run formats in sequence to keep server simple
         for (const f of fmts) {
-          await downloadSingle({ assetId, dataset, format: f });
+          // hit /api/convert for single output
+          const body = { assetId, dataset, defaultDataset: dataset, format: f };
+          const res = await postJSON("/api/convert", body);
+          const resClone = res.clone(); // for parsing text/json while still downloading
+
+          // filename & download
+          const filename = res.headers.get("x-filename") || `mapbuddy_${assetId}.${f==="shpzip"?"zip":f}`;
+          const blob = await res.blob();
+          downloadBlobAs(blob, filename);
+
+          // try to derive coords
+          if (!bestCoords) {
+            if (f === "kml") {
+              const kmlText = await resClone.text();
+              bestCoords = centroidFromKmlText(kmlText);
+            } else if (f === "geojson") {
+              const gjText = await resClone.text();
+              bestCoords = centroidFromGeoJSON(gjText);
+            }
+          }
         }
 
-        // Try to get coords for a clean Google Maps link
+        // Build Google Maps link
         let link = "";
-        const coords = await fetchCoords(dataset, assetId);
-        if (coords) {
-          link = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
+        if (bestCoords) {
+          link = `https://www.google.com/maps/search/?api=1&query=${bestCoords.lat},${bestCoords.lng}`;
         } else {
-          // graceful fallback: text search
+          // graceful fallback if we couldn’t derive coords
           const label = DATASET_LABELS[dataset] || dataset;
           link = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + " " + label)}`;
         }
@@ -339,24 +429,23 @@
       }
     });
 
-    // ---------- BULK ----------
+    // ---------- BULK (unchanged logic; your server already works) ----------
     const drop = $("drop"), file = $("file"), loaded = $("loaded");
-    drop.addEventListener("click", () => file.click());
-    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("border-map-blue","bg-blue-50"); });
-    drop.addEventListener("dragleave", () => drop.classList.remove("border-map-blue","bg-blue-50"));
-    drop.addEventListener("drop", e => {
+    drop?.addEventListener("click", () => file.click());
+    drop?.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("border-map-blue","bg-blue-50"); });
+    drop?.addEventListener("dragleave", () => drop.classList.remove("border-map-blue","bg-blue-50"));
+    drop?.addEventListener("drop", e => {
       e.preventDefault();
       drop.classList.remove("border-map-blue","bg-blue-50");
       if (e.dataTransfer.files?.[0]) attachFile(e.dataTransfer.files[0]);
     });
-    file.addEventListener("change", e => { if (e.target.files?.[0]) attachFile(e.target.files[0]); });
+    file?.addEventListener("change", e => { if (e.target.files?.[0]) attachFile(e.target.files[0]); });
 
     let bulkItems = [];
     function attachFile(f) {
       const reader = new FileReader();
       reader.onload = () => {
         const lines = (reader.result || "").toString().split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-        // assume first row header; everything else 1st column is the id; ignore commas in rest
         const ids = lines.slice(1).map(row => row.split(",")[0]).map(normAsset).filter(Boolean);
         bulkItems = ids.map(id => ({ assetId: id }));
         loaded.textContent = `Loaded ${bulkItems.length} assets`;
@@ -365,7 +454,6 @@
     }
 
     async function downloadBulkZip({dataset, format}) {
-      // /api/bulk requires zipped format names
       const res = await postJSON("/api/bulk", {
         items: bulkItems,
         defaultDataset: dataset,
@@ -373,13 +461,7 @@
       });
       const filename = res.headers.get("x-filename") || `mapbuddy_${format}.zip`;
       const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(a.href);
+      downloadBlobAs(blob, filename);
     }
 
     $("bulkRunBtn").addEventListener("click", async () => {
@@ -395,7 +477,6 @@
       $("bulkRunBtn").disabled = true;
       $("bulkRunBtn").textContent = "Processing Assets…";
       try {
-        // Correct zipped names for the bulk endpoint
         if (wantKml) await downloadBulkZip({ dataset, format: "kmlzip" });
         if (wantGeo) await downloadBulkZip({ dataset, format: "geojsonzip" });
         if (wantShp) await downloadBulkZip({ dataset, format: "shpzip" });
@@ -407,6 +488,9 @@
         $("bulkRunBtn").disabled = false;
       }
     });
+
+    // initial hint
+    showHint();
   </script>
 </body>
 </html>
