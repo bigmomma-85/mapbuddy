@@ -4,43 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MapBuddy — Asset → KML / GeoJSON / Shapefile</title>
-  <meta name="color-scheme" content="light" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            mbBlue: "#2563eb",
-            mbGreen: "#059669",
-            mbGray: "#0f172a",
-          },
-          boxShadow: {
-            card: "0 10px 30px rgba(2, 6, 23, 0.08)"
+            mbBlue:  "#2563eb",
+            mbGreen: "#059669"
           }
         }
       }
     }
   </script>
-  <style>
-    .btn-grad {
-      @apply rounded-xl text-white font-semibold px-5 py-3 transition-transform shadow-md;
-      background: linear-gradient(90deg, #2563eb 0%, #059669 100%);
-    }
-    .btn-grad:disabled { @apply opacity-60 cursor-not-allowed; }
-    .btn-soft {
-      @apply rounded-xl bg-white text-mbBlue font-semibold px-5 py-3 shadow border border-blue-100;
-    }
-    .chip { @apply inline-flex items-center gap-2 text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700; }
-    .pill {
-      @apply inline-flex items-center px-4 py-2 rounded-full font-semibold transition shadow;
-    }
-    .pill-active {
-      background: linear-gradient(90deg, #2563eb 0%, #059669 100%);
-      color: #fff;
-    }
-    .pill-idle { @apply bg-white text-gray-700 border border-gray-200; }
-  </style>
 </head>
 <body class="bg-gradient-to-b from-slate-50 to-blue-50 text-slate-900">
 
@@ -66,24 +42,21 @@
 
     <!-- Mode Toggle -->
     <div class="mt-6 flex gap-3">
-      <button id="btnSingle" class="pill pill-active">Single</button>
-      <button id="btnBulk" class="pill pill-idle">Bulk</button>
+      <button id="btnSingle" class="inline-flex items-center px-4 py-2 rounded-full font-semibold text-white shadow transition bg-gradient-to-r from-mbBlue to-mbGreen">Single</button>
+      <button id="btnBulk"   class="inline-flex items-center px-4 py-2 rounded-full font-semibold bg-white text-gray-700 border border-gray-200 shadow-sm transition">Bulk</button>
     </div>
   </section>
 
-  <!-- Single Card -->
+  <!-- Single -->
   <section id="singlePanel" class="max-w-6xl mx-auto px-4 sm:px-6 mt-6">
-    <div class="bg-white shadow-card rounded-2xl p-5 sm:p-6">
+    <div class="bg-white shadow-xl rounded-2xl p-5 sm:p-6">
       <div class="grid lg:grid-cols-12 gap-4 items-end">
-        <!-- Asset -->
         <div class="lg:col-span-4">
           <label class="block text-sm font-medium mb-2">Asset / BMP ID</label>
           <input id="singleAsset" type="text"
                  placeholder="e.g., WP0399, 210049UT, LOD_12345"
                  class="w-full rounded-xl border-slate-200 focus:ring-mbBlue focus:border-mbBlue px-4 py-3" />
         </div>
-
-        <!-- Dataset -->
         <div class="lg:col-span-5">
           <label class="block text-sm font-medium mb-2">Dataset</label>
           <select id="singleDataset"
@@ -98,8 +71,6 @@
             <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
           </select>
         </div>
-
-        <!-- Format -->
         <div class="lg:col-span-3">
           <label class="block text-sm font-medium mb-2">Format</label>
           <select id="singleFormat"
@@ -111,33 +82,41 @@
         </div>
       </div>
 
-      <!-- Actions -->
       <div class="mt-5 flex flex-wrap items-center gap-3">
-        <button id="btnDownloadSingle" class="btn-grad">Download</button>
+        <!-- Gradient primary -->
+        <button id="btnDownloadSingle"
+                class="rounded-xl text-white font-semibold px-5 py-3 transition shadow-md bg-gradient-to-r from-mbBlue to-mbGreen">
+          Download
+        </button>
 
         <!-- Hidden until generated -->
-        <a id="linkGmaps"
-           href="#"
-           target="_blank"
-           class="hidden btn-soft">Open in Google Maps →</a>
+        <a id="linkGmaps" href="#" target="_blank"
+           class="hidden rounded-xl bg-white text-mbBlue font-semibold px-5 py-3 shadow border border-blue-100">
+          Open in Google Maps →
+        </a>
 
-        <!-- Hidden until generated (copies same link) -->
-        <button id="btnCopyLink" class="hidden btn-soft">Copy link</button>
+        <!-- Hidden until generated -->
+        <button id="btnCopyLink"
+                class="hidden rounded-xl text-white font-semibold px-5 py-3 transition shadow-md bg-gradient-to-r from-mbBlue to-mbGreen">
+          Copy link
+        </button>
 
         <span id="singleStatus" class="text-slate-500 ml-1">Enter an asset ID.</span>
 
-        <span class="chip ml-auto"><span class="font-semibold">Note</span> MDOT SHA layers may require VPN.</span>
+        <span class="ml-auto inline-flex items-center gap-2 text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-700">
+          <span class="font-semibold">Note</span> MDOT SHA layers may require VPN.
+        </span>
       </div>
     </div>
   </section>
 
-  <!-- Bulk Card -->
+  <!-- Bulk -->
   <section id="bulkPanel" class="max-w-6xl mx-auto px-4 sm:px-6 mt-6 hidden">
-    <div class="bg-white shadow-card rounded-2xl p-5 sm:p-6">
+    <div class="bg-white shadow-xl rounded-2xl p-5 sm:p-6">
       <h2 class="text-xl font-bold mb-4">Bulk Asset Conversion</h2>
 
       <div class="grid lg:grid-cols-12 gap-6">
-        <!-- Left column -->
+        <!-- Left -->
         <div class="lg:col-span-6 space-y-4">
           <div>
             <label class="block text-sm font-medium mb-2">Dataset</label>
@@ -154,11 +133,10 @@
             </select>
           </div>
 
-          <!-- CSV drop area -->
+          <!-- CSV drop -->
           <div id="dropArea"
                class="border-2 border-dashed border-blue-200 rounded-2xl p-8 text-center hover:border-mbBlue transition-colors">
             <div class="mx-auto w-14 h-14 rounded-full bg-gradient-to-r from-mbBlue to-mbGreen text-white flex items-center justify-center">
-              <!-- upload icon -->
               <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6h.1a5 5 0 011 9.9M15 13l-3-3-3 3m3-3v12"/>
@@ -168,12 +146,11 @@
             <p class="text-slate-500">or click to browse</p>
             <input id="bulkFile" type="file" accept=".csv" class="hidden" />
             <div class="mt-4">
-              <button id="btnChooseCsv" class="btn-soft">Choose CSV File</button>
+              <button id="btnChooseCsv" class="rounded-xl bg-white text-mbBlue font-semibold px-5 py-3 shadow border border-blue-100">Choose CSV File</button>
               <span id="csvStatus" class="ml-3 text-slate-500"></span>
             </div>
           </div>
 
-          <!-- CSV rules -->
           <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
             <h5 class="font-semibold text-blue-900 mb-2">CSV Format Requirements:</h5>
             <ul class="text-sm text-blue-800 space-y-1">
@@ -185,7 +162,7 @@
           </div>
         </div>
 
-        <!-- Right column -->
+        <!-- Right -->
         <div class="lg:col-span-6 space-y-4">
           <div>
             <label class="block text-sm font-medium mb-2">Output Format</label>
@@ -197,10 +174,10 @@
             </select>
           </div>
 
-          <!-- Removed the Google Maps Links card per request -->
-
           <div class="pt-2">
-            <button id="btnProcessBulk" class="btn-grad w-full">Process Bulk Conversion</button>
+            <button id="btnProcessBulk" class="w-full rounded-xl text-white font-semibold px-5 py-3 transition shadow-md bg-gradient-to-r from-mbBlue to-mbGreen">
+              Process Bulk Conversion
+            </button>
             <div id="bulkStatus" class="mt-2 text-slate-500"></div>
           </div>
         </div>
@@ -214,34 +191,27 @@
   </footer>
 
   <script>
-    // ---------- helpers ----------
-    const $ = (sel) => document.querySelector(sel);
+    // utilities
+    const $ = (s) => document.querySelector(s);
 
     function downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
     }
 
     async function getGoogleMapsUrl(assetId, datasetKey) {
-      // Assumes you already had a working endpoint to resolve the link.
-      // Keep this path consistent with your backend.
       try {
         const res = await fetch(`/api/gmaps?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`);
-        if (!res.ok) throw new Error("gmaps lookup failed");
+        if (!res.ok) throw 0;
         const data = await res.json();
         return data.url || "#";
-      } catch {
-        return "#";
-      }
+      } catch { return "#"; }
     }
 
-    // ---------- elements ----------
+    // elements
     const btnSingle = $("#btnSingle");
     const btnBulk   = $("#btnBulk");
     const singlePanel = $("#singlePanel");
@@ -266,31 +236,28 @@
     const csvStatus   = $("#csvStatus");
     const bulkStatus  = $("#bulkStatus");
 
-    // ---------- mode toggle ----------
+    // mode toggle (no custom CSS)
+    const pillActive = "inline-flex items-center px-4 py-2 rounded-full font-semibold text-white shadow transition bg-gradient-to-r from-mbBlue to-mbGreen";
+    const pillIdle   = "inline-flex items-center px-4 py-2 rounded-full font-semibold bg-white text-gray-700 border border-gray-200 shadow-sm transition";
+
     function setMode(mode) {
       if (mode === "single") {
         singlePanel.classList.remove("hidden");
         bulkPanel.classList.add("hidden");
-        btnSingle.classList.add("pill-active");
-        btnSingle.classList.remove("pill-idle");
-        btnBulk.classList.remove("pill-active");
-        btnBulk.classList.add("pill-idle");
+        btnSingle.className = pillActive;
+        btnBulk.className   = pillIdle;
       } else {
         singlePanel.classList.add("hidden");
         bulkPanel.classList.remove("hidden");
-        btnBulk.classList.add("pill-active");
-        btnBulk.classList.remove("pill-idle");
-        btnSingle.classList.remove("pill-active");
-        btnSingle.classList.add("pill-idle");
+        btnSingle.className = pillIdle;
+        btnBulk.className   = pillActive;
       }
     }
     btnSingle.addEventListener("click", () => setMode("single"));
     btnBulk.addEventListener("click",   () => setMode("bulk"));
-
-    // default
     setMode("single");
 
-    // ---------- SINGLE logic ----------
+    // SINGLE logic
     let singleGenerated = false;
     let currentGmapsUrl = "#";
 
@@ -300,17 +267,14 @@
       linkGmaps.classList.add("hidden");
       btnCopyLink.classList.add("hidden");
     }
-
     singleAsset.addEventListener("input", hideMapActions);
     singleDataset.addEventListener("change", hideMapActions);
     singleFormat.addEventListener("change", hideMapActions);
 
     btnDownloadSingle.addEventListener("click", async () => {
       const assetId = singleAsset.value.trim();
-      if (!assetId) {
-        singleStatus.textContent = "Enter an asset ID.";
-        return;
-      }
+      if (!assetId) { singleStatus.textContent = "Enter an asset ID."; return; }
+
       const dataset = singleDataset.value;
       const format  = singleFormat.value;
 
@@ -324,19 +288,14 @@
           body: JSON.stringify({ assetId, dataset, format })
         });
         if (!res.ok) throw new Error(await res.text() || "Request failed.");
-
         const blob = await res.blob();
 
-        // filename from header (fallback by format)
         const cd = res.headers.get("content-disposition") || "";
         const m  = /filename="?([^"]+)"?/i.exec(cd);
         const fallback =
-          format === "geojson" ? "mapbuddy.geojson" :
-          format === "shapefile" ? "mapbuddy_shapefile.zip" :
-          "mapbuddy.kml";
-        const filename = m ? m[1] : fallback;
-
-        downloadBlob(blob, filename);
+          format === "geojson"  ? "mapbuddy.geojson" :
+          format === "shapefile"? "mapbuddy_shapefile.zip" : "mapbuddy.kml";
+        downloadBlob(blob, m ? m[1] : fallback);
 
         // show map link now
         singleGenerated = true;
@@ -363,7 +322,7 @@
       } catch {}
     });
 
-    // ---------- BULK logic ----------
+    // BULK logic
     let bulkCsvText = "";
     btnChooseCsv.addEventListener("click", () => bulkFile.click());
 
@@ -383,51 +342,37 @@
     });
 
     function handleCsvFile(file) {
-      if (!file) return;
-      if (!/\.csv$/i.test(file.name)) {
-        csvStatus.textContent = "Please choose a .csv file.";
-        return;
-      }
+      if (!/\.csv$/i.test(file.name)) { csvStatus.textContent = "Please choose a .csv file."; return; }
       const reader = new FileReader();
-      reader.onload = () => {
-        bulkCsvText = String(reader.result || "");
-        csvStatus.textContent = file.name + " • loaded";
-      };
+      reader.onload = () => { bulkCsvText = String(reader.result || ""); csvStatus.textContent = file.name + " • loaded"; };
       reader.readAsText(file);
     }
 
     function parseCsvToItems(csvText) {
       const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (lines.length === 0) return [];
-      // Allow optional header: if the first row contains non-asset tokens, skip it.
+      if (!lines.length) return [];
       const rows = lines.map(l => l.split(",").map(s => s.trim()));
       const startIdx = (rows[0][0] || "").toLowerCase().includes("asset") ? 1 : 0;
-
       const items = [];
-      for (let i = startIdx; i < rows.length; i++) {
+      for (let i=startIdx;i<rows.length;i++){
         const [assetId, datasetMaybe] = rows[i];
         if (!assetId) continue;
-        const rec = { assetId: assetId };
-        if (datasetMaybe) rec.dataset = datasetMaybe; // respect optional per-row dataset
+        const rec = { assetId };
+        if (datasetMaybe) rec.dataset = datasetMaybe;
         items.push(rec);
       }
       return items;
     }
 
     btnProcessBulk.addEventListener("click", async () => {
-      if (!bulkCsvText) {
-        bulkStatus.textContent = "Please choose a CSV file.";
-        return;
-      }
+      if (!bulkCsvText) { bulkStatus.textContent = "Please choose a CSV file."; return; }
       const items = parseCsvToItems(bulkCsvText);
-      if (items.length === 0) {
-        bulkStatus.textContent = "No valid rows found in CSV.";
-        return;
-      }
+      if (!items.length) { bulkStatus.textContent = "No valid rows found in CSV."; return; }
+
       const payload = {
         items,
         defaultDataset: bulkDataset.value,
-        format: bulkFormat.value  // 'kmlzip' | 'geojsonzip' | 'shapefile'
+        format: bulkFormat.value
       };
 
       bulkStatus.textContent = "Processing…";
@@ -440,17 +385,15 @@
           body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text() || "Bulk request failed.");
-
         const blob = await res.blob();
+
         const cd = res.headers.get("content-disposition") || "";
         const m  = /filename="?([^"]+)"?/i.exec(cd);
         const fallback =
           payload.format === "geojsonzip" ? "mapbuddy_geojson.zip" :
-          payload.format === "shapefile" ? "mapbuddy_shapefile.zip" :
-          "mapbuddy_kml.zip";
-        const filename = m ? m[1] : fallback;
-
-        downloadBlob(blob, filename);
+          payload.format === "shapefile"  ? "mapbuddy_shapefile.zip" :
+                                           "mapbuddy_kml.zip";
+        downloadBlob(blob, m ? m[1] : fallback);
         bulkStatus.textContent = "Done.";
       } catch (err) {
         bulkStatus.textContent = "Error: " + err.message;
