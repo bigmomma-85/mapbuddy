@@ -242,7 +242,7 @@
 
   <!-- Logic -->
   <script>
-    /* Set if deployed under a subpath, e.g. '/mapbuddy' */
+    /* Change this if your API is served from a subpath like '/mapbuddy' */
     const API_BASE = '';
 
     /* UI value -> server dataset key */
@@ -257,7 +257,6 @@
       mdsha_managed_landscape: 'mdsha_managed_landscape'
     };
 
-    /* Sometimes the visible label comes through — map those too */
     const DATASET_TEXT_MAP = {
       'Fairfax — Stormwater Facilities (FACILITY_ID)': 'fairfax_bmps',
       'TMDL — Stormwater Control Structures': 'mdsha_tmdl_scs',
@@ -276,6 +275,7 @@
       `${API_BASE}/api/asset`
     ];
     const BULK_ENDPOINTS = [
+      `${API_BASE}/api/bulk-one`,
       `${API_BASE}/api/bulk`,
       `${API_BASE}/api/convert/bulk`,
       `${API_BASE}/api/download/bulk`
@@ -313,7 +313,6 @@
     let csvUploaded    = false;
     let currentGoogleLink = null;
 
-    /* helpers */
     const enable = (el, on = true) => el.disabled = !on;
     const isMdsha = key => /^mdsha_/.test(key);
 
@@ -326,10 +325,15 @@
       return val || txt;
     }
 
-    function uiToServerFormat(uiFmt, dsKey){
-      if (uiFmt === 'kml')      return isMdsha(dsKey) ? 'kmlzip' : 'kml';
-      if (uiFmt === 'shapefile')return 'shpzip';
-      if (uiFmt === 'geojson')  return 'geojson';
+    /* format mapping with wide fallbacks */
+    function mdshaCandidates(uiFmt){
+      if (uiFmt === 'kml')       return ['kml','kmlzip'];
+      if (uiFmt === 'shapefile') return ['shapefile','shpzip'];
+      if (uiFmt === 'geojson')   return ['geojson'];
+      return [uiFmt];
+    }
+    function nonMdshaFmt(uiFmt){
+      if (uiFmt === 'shapefile') return 'shpzip'; // server usually zips
       return uiFmt;
     }
 
@@ -348,12 +352,23 @@
       URL.revokeObjectURL(url);
     }
     async function postBinary(url, payload){
-      const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(`${url} → ${res.status}`);
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Accept':'*/*' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(()=> '');
+        throw new Error(`${url} → ${res.status} ${res.statusText} ${text || ''}`.trim());
+      }
       return { res, blob: await res.blob() };
     }
     async function postForText(url, payload){
-      const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Accept':'application/json,text/plain,*/*' },
+        body: JSON.stringify(payload)
+      });
       if (!res.ok) throw new Error(`${url} → ${res.status}`);
       return res.text();
     }
@@ -432,19 +447,21 @@
       return out;
     }
 
-    /* SINGLE: MD SHA => bulk-one with format fallbacks */
+    /* SINGLE via bulk-one for MD-SHA with multi-format/field fallbacks */
     async function singleViaBulkOne(assetId, dsKey, uiFmt){
-      const initial = uiToServerFormat(uiFmt, dsKey);
-      const candidates =
-        initial === 'kmlzip'  ? ['kmlzip','kml'] :
-        initial === 'shpzip'  ? ['shpzip','shapefile'] :
-        /* geojson stays geojson */ ['geojson'];
-
+      const fmtCandidates = mdshaCandidates(uiFmt);
       let lastErr;
-      for (const fmt of candidates){
+      for (const fmt of fmtCandidates){
         for (const ep of BULK_ENDPOINTS){
           try{
-            const payload = { items:[{assetId}], defaultDataset: dsKey, format: fmt };
+            const payload = {
+              items: [{ assetId }],
+              defaultDataset: dsKey,
+              dataset: dsKey,
+              datasetKey: dsKey,
+              single: true,
+              format: fmt
+            };
             const { res, blob } = await postBinary(ep, payload);
             const name = suggestedFilename(res, `${assetId}_${fmt}.zip`);
             saveBlob(blob, name);
@@ -456,11 +473,11 @@
     }
 
     async function singleViaSingle(assetId, dsKey, uiFmt){
-      const fmt = uiToServerFormat(uiFmt, dsKey);
+      const fmt = nonMdshaFmt(uiFmt);
       let lastErr;
       for (const ep of SINGLE_ENDPOINTS){
         try{
-          const payload = { assetId, dataset: dsKey, format: fmt };
+          const payload = { assetId, dataset: dsKey, datasetKey: dsKey, format: fmt };
           const { res, blob } = await postBinary(ep, payload);
           const outName = fmt==='kml' ? `${assetId}.kml`
                          : fmt==='geojson' ? `${assetId}.geojson`
@@ -474,9 +491,8 @@
       throw lastErr || new Error('single failed');
     }
 
-    const datasetSelectEl = document.getElementById('datasetSelect');
-    const singleBtnEl     = document.getElementById('singleConvertBtn');
-
+    /* Single click */
+    const singleBtnEl = document.getElementById('singleConvertBtn');
     singleBtn.addEventListener('click', async () => {
       if (singleBtn.disabled) return;
 
@@ -505,7 +521,7 @@
         enable(singleBtn, true);
       }catch(err){
         console.error('Single failed:', err);
-        alert('Single conversion failed. Please retry.');
+        alert(`Single conversion failed. Please retry.\n\nLast error: ${String(err).slice(0,300)}`);
         singleBtn.textContent = 'Generate Map Files';
         singleBtn.classList.remove('from-green-500','to-green-600');
         singleBtn.classList.add('from-map-blue','to-map-green');
@@ -525,18 +541,27 @@
 
       try{
         for (const uiFmt of formats){
-          const fmt = uiToServerFormat(uiFmt, dsKey);
-          let lastErr, ok=false;
-          for (const ep of BULK_ENDPOINTS){
-            try{
-              const payload = { items: uploadedAssets, defaultDataset: dsKey, format: fmt };
-              const { res, blob } = await postBinary(ep, payload);
-              const name = suggestedFilename(res, `mapbuddy_${fmt}.zip`);
-              saveBlob(blob, name);
-              ok = true; break;
-            }catch(e){ lastErr = e; }
+          const fmtList = isMdsha(dsKey) ? mdshaCandidates(uiFmt) : [nonMdshaFmt(uiFmt)];
+          let success = false, lastErr;
+          for (const fmt of fmtList){
+            for (const ep of BULK_ENDPOINTS){
+              try{
+                const payload = {
+                  items: uploadedAssets,
+                  defaultDataset: dsKey,
+                  dataset: dsKey,
+                  datasetKey: dsKey,
+                  format: fmt
+                };
+                const { res, blob } = await postBinary(ep, payload);
+                const name = suggestedFilename(res, `mapbuddy_${fmt}.zip`);
+                saveBlob(blob, name);
+                success = true; break;
+              }catch(e){ lastErr = e; }
+            }
+            if (success) break;
           }
-          if (!ok) throw lastErr || new Error('bulk failed');
+          if (!success) throw lastErr || new Error('bulk failed');
         }
 
         bulkBtn.textContent = 'Download Bulk Files';
@@ -545,7 +570,7 @@
         enable(bulkBtn, true);
       }catch(err){
         console.error('Bulk failed:', err);
-        alert('Bulk conversion failed. Please retry.');
+        alert(`Bulk conversion failed. Please retry.\n\nLast error: ${String(err).slice(0,300)}`);
         bulkBtn.textContent = 'Process Bulk Conversion';
         bulkBtn.classList.remove('from-green-500','to-green-600');
         bulkBtn.classList.add('from-map-blue','to-map-green');
@@ -553,7 +578,7 @@
       }
     });
 
-    /* Google Maps link (prefers true lat/lng) */
+    /* Google Maps link (prefers lat/lng) */
     async function buildGoogleLink(assetId, datasetKey){
       // 1) explicit link API
       for (const ep of LINK_ENDPOINTS){
@@ -567,7 +592,7 @@
       // 2) try SINGLE geojson (works for Fairfax)
       for (const ep of SINGLE_ENDPOINTS){
         try{
-          const payload = { assetId, dataset: datasetKey, format: 'geojson', silent: true };
+          const payload = { assetId, dataset: datasetKey, datasetKey: datasetKey, format: 'geojson', silent: true };
           const txt = await postForText(ep, payload);
           const gj = JSON.parse(txt);
           const ll = centroidFromGeoJSON(gj);
@@ -575,24 +600,24 @@
         }catch(e){}
       }
 
-      // 3) MD SHA: try BULK geojson for one item and hope for JSON body
+      // 3) MD SHA: try BULK geojson for one item (some stacks return JSON body for one feature)
       if (isMdsha(datasetKey)){
         for (const ep of BULK_ENDPOINTS){
           try{
-            const payload = { items:[{assetId}], defaultDataset: datasetKey, format: 'geojson' };
+            const payload = { items:[{assetId}], defaultDataset: datasetKey, dataset: datasetKey, datasetKey: datasetKey, format: 'geojson' };
             const txt = await postForText(ep, payload);
             try{
               const gj = JSON.parse(txt);
               const ll = centroidFromGeoJSON(gj);
               if (ll){ const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`; }
             }catch(parseErr){
-              // If it's a zip, we can't parse here; fall through.
+              // If it was a zip, parsing fails; fall through.
             }
           }catch(e){}
         }
       }
 
-      // 4) fallback: plain query (last resort)
+      // 4) fallback: plain query
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + ' ' + datasetKey)}`;
     }
 
