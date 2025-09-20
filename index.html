@@ -242,12 +242,11 @@
 
   <!-- Logic -->
   <script>
-    /* Auto-detect API base. If your app lives under /mapbuddy this will pick it up. */
+    // Auto-detect API base when deployed under a subpath like /mapbuddy
     const API_BASE = (window.__MAPBUDDY_API_BASE !== undefined)
       ? window.__MAPBUDDY_API_BASE
       : (location.pathname.includes('/mapbuddy') ? '/mapbuddy' : '');
 
-    /* UI dataset -> server key */
     const DATASET_KEY_MAP = {
       fairfax: 'fairfax_bmps',
       mdsha_tmdl_scs: 'mdsha_tmdl_scs',
@@ -269,7 +268,7 @@
       'MDOT SHA — Managed Landscape (LOD_ID)': 'mdsha_managed_landscape'
     };
 
-    /* Only endpoints we know exist */
+    // Known-good endpoints only
     const SINGLE_ENDPOINTS = [
       `${API_BASE}/api/single`,
       `${API_BASE}/api/download`,
@@ -287,7 +286,7 @@
 
     const $ = id => document.getElementById(id);
 
-    /* Elements */
+    // Elements
     const singleModeBtn = $('singleModeBtn');
     const bulkModeBtn   = $('bulkModeBtn');
     const singleMode    = $('singleMode');
@@ -324,7 +323,6 @@
       return val || txt;
     }
 
-    /* MD-SHA prefers zipped outputs; try those first */
     function mdshaCandidates(uiFmt){
       if (uiFmt === 'kml')       return ['kmlzip','kml'];
       if (uiFmt === 'shapefile') return ['shpzip','shapefile'];
@@ -377,31 +375,33 @@
       return res.json();
     }
 
-    /* mode toggle */
+    // Toggle
     singleModeBtn.addEventListener('click', () => {
       singleModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
       bulkModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
       bulkModeBtn.classList.add('text-gray-600');
       singleMode.classList.remove('hidden'); bulkMode.classList.add('hidden');
+      singleReady();
     });
     bulkModeBtn.addEventListener('click', () => {
       bulkModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
       singleModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
       singleModeBtn.classList.add('text-gray-600');
       bulkMode.classList.remove('hidden'); singleMode.classList.add('hidden');
+      bulkReady();
     });
 
-    /* readiness */
+    // Readiness
     function singleReady(){
       const hasDs = datasetSelect.value || datasetSelect.options[datasetSelect.selectedIndex]?.text;
       const hasId = assetNumber.value.trim();
       const hasFmt = singleFormats.some(cb => cb.checked);
-      enable(singleBtn, hasDs && hasId && hasFmt);
+      enable(singleBtn, !!(hasDs && hasId && hasFmt));
     }
     function bulkReady(){
       const hasDs = bulkDataset.value || bulkDataset.options[bulkDataset.selectedIndex]?.text;
       const hasFmt = bulkFormats.some(cb => cb.checked);
-      enable(bulkBtn, csvUploaded && hasDs && hasFmt);
+      enable(bulkBtn, !!(csvUploaded && hasDs && hasFmt));
     }
     datasetSelect.addEventListener('change', singleReady);
     assetNumber.addEventListener('input', singleReady);
@@ -409,12 +409,7 @@
     bulkDataset.addEventListener('change', bulkReady);
     bulkFormats.forEach(cb => cb.addEventListener('change', bulkReady));
 
-    /* CSV upload */
-    const csvArea = document.getElementById('csvUploadArea');
-    const csvFileInput = document.getElementById('csvFileInput');
-    const chooseCsvBtn = document.getElementById('chooseCsvBtn');
-    const csvMeta = document.getElementById('csvMeta');
-
+    // CSV upload
     chooseCsvBtn.addEventListener('click', () => csvFileInput.click());
     csvArea.addEventListener('dragover', e => { e.preventDefault(); csvArea.classList.add('bg-blue-50'); });
     csvArea.addEventListener('dragleave', () => csvArea.classList.remove('bg-blue-50'));
@@ -445,18 +440,18 @@
         const cols = rows[i].split(',').map(c => c.trim());
         if (!cols.length) continue;
         const first = cols[0];
-        if (i===0 && /asset|bmp|id/i.test(first)) continue;
+        if (i===0 && /asset|bmp|id/i.test(first)) continue; // header
         out.push({ assetId:first });
       }
       return out;
     }
 
-    /* SINGLE via bulk (MD-SHA) */
+    // Single via bulk (for MD-SHA)
     async function singleViaBulk(assetId, dsKey, uiFmt){
-      const fmtCandidates = mdshaCandidates(uiFmt); // kmlzip→kml, shpzip→shapefile
+      const fmtCandidates = mdshaCandidates(uiFmt);
       let lastErr;
       for (const fmt of fmtCandidates){
-        for (const ep of BULK_ENDPOINTS){ // only /api/bulk, /api/convert/bulk
+        for (const ep of BULK_ENDPOINTS){
           try{
             const payload = {
               items: [{ assetId }],
@@ -495,9 +490,7 @@
       throw lastErr || new Error('single failed');
     }
 
-    /* Single click */
-    const singleBtnEl = document.getElementById('singleConvertBtn');
-    const googleBox = document.getElementById('googleMapsSection');
+    // Single click
     singleBtn.addEventListener('click', async () => {
       if (singleBtn.disabled) return;
 
@@ -534,8 +527,7 @@
       }
     });
 
-    /* BULK */
-    const bulkBtnEl = document.getElementById('bulkConvertBtn');
+    // Bulk click
     bulkBtn.addEventListener('click', async () => {
       if (bulkBtn.disabled) return;
 
@@ -584,9 +576,8 @@
       }
     });
 
-    /* Google Maps link (prefers lat/lng) */
+    // Google Maps link helpers
     async function buildGoogleLink(assetId, datasetKey){
-      // Endpoint that returns a URL (if present in your API)
       for (const ep of LINK_ENDPOINTS){
         try{
           const url = `${ep}?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`;
@@ -594,7 +585,7 @@
           if (json && json.url) return json.url;
         }catch(e){}
       }
-      // Fallback 1: request GeoJSON for the single feature
+      // Fallback to GeoJSON centroid
       for (const ep of SINGLE_ENDPOINTS){
         try{
           const payload = { assetId, dataset: datasetKey, datasetKey: datasetKey, format: 'geojson', silent: true };
@@ -604,7 +595,6 @@
           if (ll){ const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`; }
         }catch(e){}
       }
-      // Fallback 2: if MD-SHA, try bulk for single item
       if (isMdsha(datasetKey)){
         for (const ep of BULK_ENDPOINTS){
           try{
@@ -618,10 +608,8 @@
           }catch(e){}
         }
       }
-      // Final fallback: text search
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + ' ' + datasetKey)}`;
     }
-
     function centroidFromGeoJSON(gj){
       let g = gj;
       if (g.type === 'Feature') g = g.geometry;
@@ -639,12 +627,14 @@
     const avg = (a)=>{ let sx=0,sy=0,n=0; a.forEach(c=>{sx+=c[0];sy+=c[1];n++;}); return n?[sx/n,sy/n]:null; };
     function bboxCenter(ring){ let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity; ring.forEach(c=>{minx=Math.min(minx,c[0]);miny=Math.min(miny,c[1]);maxx=Math.max(maxx,c[0]);maxy=Math.max(maxy,c[1]);}); return [(minx+maxx)/2,(miny+maxy)/2]; }
 
-    /* expose for buttons */
     window.copyGoogleMapsLink = function(){ if(!currentGoogleLink) return; navigator.clipboard.writeText(currentGoogleLink).then(()=>alert('Google Maps link copied!')); };
     window.openGoogleMaps = function(){ if(!currentGoogleLink) return; window.open(currentGoogleLink,'_blank','noopener,noreferrer'); };
 
-    /* initial state */
-    (function init(){ singleReady(); bulkReady(); })();
+    // Kick off initial ready check after DOM is live
+    document.addEventListener('DOMContentLoaded', () => {
+      singleReady();
+      bulkReady();
+    });
   </script>
 </body>
 </html>
