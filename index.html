@@ -202,6 +202,15 @@
   const stripNonPrintable = (s) => s.replace(/[^\x20-\x7E]/g, "");
   const isTmdlDataset = (ds) => /^tmdl_/i.test(ds) || ds === "mdsha_lod";
 
+  const TMDL_DATASETS = [
+    "tmdl_scs",
+    "tmdl_retrofits",
+    "tmdl_trees",
+    "tmdl_pavement",
+    "tmdl_streams",
+    "tmdl_outfalls"
+  ];
+
   // Normalize IDs (important for TMDL / SHA)
   function normalizeIdForDataset(id, dataset) {
     let x = stripNonPrintable(id || "");
@@ -224,6 +233,54 @@
     a.click();
     a.remove();
     URL.revokeObjectURL(a.href);
+  }
+
+  // --- Geometry extraction for Google Maps link ---
+  async function blobToText(blob) {
+    return await blob.text();
+  }
+  function centroidOfCoords(coords) {
+    // coords: [[lon,lat], ...] or deep nested; flatten once.
+    try {
+      let flat = [];
+      (function walk(c){
+        if (typeof c[0] === "number") { flat.push(c); return; }
+        for (const x of c) walk(x);
+      })(coords);
+      if (!flat.length) return null;
+      let sx = 0, sy = 0;
+      for (const [lon,lat] of flat) { sx += lon; sy += lat; }
+      const lon = sx / flat.length, lat = sy / flat.length;
+      return { lat, lon };
+    } catch { return null; }
+  }
+  function parseGeoJSONForLatLng(txt) {
+    try {
+      const gj = JSON.parse(txt);
+      const feat = (gj.type === "Feature") ? gj : (gj.features && gj.features[0]);
+      if (!feat) return null;
+      const g = (feat.type === "Feature") ? feat.geometry : feat;
+      if (!g) return null;
+      if (g.type === "Point") {
+        const [lon, lat] = g.coordinates;
+        return { lat, lon };
+      }
+      // Lines/Polys → simple centroid
+      const c = centroidOfCoords(g.coordinates);
+      return c;
+    } catch { return null; }
+  }
+  function parseKMLForLatLng(txt) {
+    try {
+      // First <coordinates> wins; format: lon,lat[,alt]
+      const m = txt.match(/<coordinates>\s*([-\d.]+),([-\d.]+)/i);
+      if (m) {
+        const lon = parseFloat(m[1]);
+        const lat = parseFloat(m[2]);
+        if (isFinite(lat) && isFinite(lon)) return { lat, lon };
+      }
+      return null;
+    } catch { return null; }
   }
 
   // ---------- UI Toggle ----------
@@ -252,8 +309,8 @@
     if (ds === "fairfax_bmps") {
       hint.textContent = "Fairfax: Use FACILITY_ID (e.g., WP0399). No spaces.";
     } else if (isTmdlDataset(ds)) {
-      hint.textContent = "MD SHA TMDL: Use the official ID (e.g., 210049UT). We'll auto-normalize by uppercasing and removing spaces/dashes.";
-      warn.textContent = "If the exact feature isn't found, double-check the TMDL source table ID.";
+      hint.textContent = "MD SHA TMDL: Use official ID (e.g., 210049UT). We auto-normalize (uppercase, remove spaces/dashes).";
+      warn.textContent = "If not found, we’ll auto-try the other TMDL layers for you.";
     }
   }
 
@@ -271,7 +328,37 @@
     $(id)?.addEventListener("change", ()=>{ refreshHints(); enableSingle(); });
   });
 
+  // ---------- Build proper Google Maps link once we have geometry ----------
+  function showGmapsLinkFromLatLng(lat, lon, label) {
+    const gmUrl = `https://www.google.com/maps?q=${encodeURIComponent(lat)},${encodeURIComponent(lon)}(${encodeURIComponent(label||"MapBuddy")})`;
+    $("gmLinkText").textContent = gmUrl;
+    $("gmOpen").onclick = () => window.open(gmUrl, "_blank", "noopener");
+    $("gmCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText(gmUrl); alert("Google Maps link copied."); }
+      catch { alert(gmUrl); }
+    };
+    $("gmWrap").classList.remove("hidden");
+  }
+
   // ---------- SINGLE ----------
+  async function trySingleOnce(dataset, assetId, fmt) {
+    const body = { assetId, dataset, defaultDataset: dataset, format: fmt };
+    const res = await fetch(API_CONVERT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      let detail = "";
+      try { detail = JSON.stringify(await res.json()); } catch {}
+      const err = new Error(`/api/convert → ${res.status} ${detail}\nPayload: ${JSON.stringify(body)}`);
+      err.status = res.status;
+      err.detail = detail;
+      throw err;
+    }
+    return res;
+  }
+
   async function runSingle() {
     if ($("singleRunBtn").disabled) return;
 
@@ -286,36 +373,69 @@
     $("singleRunBtn").textContent = "Generating Files…";
     $("gmWrap")?.classList.add("hidden");
 
+    let foundLatLng = null;
+    let usedDataset = dataset;
+
     try {
       for (const fmt of formats) {
-        const body = { assetId, dataset, defaultDataset: dataset, format: fmt };
-        const res = await fetch(API_CONVERT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-
-        if (!res.ok) {
-          let detail = "";
-          try { detail = JSON.stringify(await res.json()); } catch {}
-          throw new Error(`/api/convert → ${res.status} ${detail}\nPayload: ${JSON.stringify(body)}`);
+        let res;
+        try {
+          // First attempt: selected dataset
+          res = await trySingleOnce(dataset, assetId, fmt);
+        } catch (e1) {
+          // If TMDL and 404 'No feature found' → fallback search other TMDL datasets
+          const likelyNotFound = (e1.status === 404) && isTmdlDataset(dataset) && /No feature found/i.test(e1.detail || "");
+          if (likelyNotFound) {
+            for (const alt of TMDL_DATASETS) {
+              if (alt === dataset) continue;
+              try {
+                res = await trySingleOnce(alt, assetId, fmt);
+                usedDataset = alt;
+                // small toast
+                console.warn(`Auto-switched TMDL dataset: ${dataset} → ${alt}`);
+                break;
+              } catch { /* keep trying */ }
+            }
+          }
+          if (!res) throw e1; // rethrow if all failed
         }
 
+        // Clone once so we can both parse and download
+        const resClone = res.clone();
+
+        // Download file
         const blob = await res.blob();
         const ext = fmt === "shpzip" ? "zip" : fmt;
         downloadBlobAs(blob, `mapbuddy_${assetId}.${ext}`);
+
+        // Try to compute GM link coordinates (KML/GeoJSON only)
+        if (!foundLatLng && (fmt === "kml" || fmt === "geojson")) {
+          const txt = await resClone.text();
+          if (fmt === "geojson") {
+            foundLatLng = parseGeoJSONForLatLng(txt);
+          } else if (fmt === "kml") {
+            foundLatLng = parseKMLForLatLng(txt);
+          }
+        }
       }
 
-      // Stable Google Maps search link
-      const gmUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + " " + dataset)}`;
-      if ($("gmWrap")) {
-        $("gmLinkText").textContent = gmUrl;
+      if (foundLatLng) {
+        showGmapsLinkFromLatLng(foundLatLng.lat, foundLatLng.lon, `${assetId} ${usedDataset}`);
+      } else {
+        // Fallback (rare): keep a text-search link, but mark as fallback.
+        const gmUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + " " + usedDataset)}`;
+        $("gmLinkText").textContent = gmUrl + "  (fallback search)";
         $("gmOpen").onclick = () => window.open(gmUrl, "_blank", "noopener");
         $("gmCopy").onclick = async () => {
-          try { await navigator.clipboard.writeText(gmUrl); alert("Google Maps link copied."); }
+          try { await navigator.clipboard.writeText(gmUrl); alert("Google Maps (fallback) copied."); }
           catch { alert(gmUrl); }
         };
         $("gmWrap").classList.remove("hidden");
+      }
+
+      if (usedDataset !== dataset) {
+        // Inform user we found it elsewhere
+        alert(`Heads up: '${assetId}' was found under ${usedDataset} (not ${dataset}).`);
       }
     } catch (err) {
       alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}`);
@@ -330,7 +450,6 @@
   let bulkItems = []; // [{assetId:"..."}]
 
   function parseCsv(text) {
-    // simple CSV: split lines, split by first comma for first column
     return text
       .replace(/^\uFEFF/, "") // strip BOM
       .split(/\r?\n/)
@@ -348,9 +467,8 @@
         bulkItems = [];
         return;
       }
-      // First column only (header + values)
       const ids = lines.slice(1).map(r => {
-        const first = r.split(/,(.*)/s)[0]; // take text up to first comma
+        const first = r.split(/,(.*)/s)[0]; // up to first comma
         return normalizeIdForDataset(first.replace(/^["']|["']$/g, ""), ds);
       }).filter(Boolean);
 
@@ -408,7 +526,6 @@
           throw new Error(`/api/bulk → ${res.status} ${detailStr}\nPayload: ${JSON.stringify(payload).slice(0, 2000)}`);
         }
 
-        // Try to surface any server-provided misses
         const missHeader = res.headers.get("x-missing-ids");
         if (missHeader) {
           alert(`Heads up: some IDs were not found by the backend:\n${missHeader}`);
