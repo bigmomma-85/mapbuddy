@@ -2,67 +2,237 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
   <title>MapBuddy — Asset → KML / GeoJSON / Shapefile</title>
   <meta name="color-scheme" content="light dark" />
   <style>
     :root{
-      --bg:#f5f8fb; --card:#ffffff; --ink:#0b1426; --muted:#5c6577;
-      --primary:#1b66ff; --primary-ink:#ffffff; --primary-ghost:#e6efff;
-      --ring:#cfe0ff; --ok:#0a7c2f; --ok-ink:#ffffff; --note:#e9eef6;
-      --border:#e6eaf1; --shadow:0 6px 24px rgba(16,24,40,.06),0 2px 8px rgba(16,24,40,.04);
+      --bg: #f5f8fb;
+      --card: #ffffff;
+      --ink: #0b1426;
+      --muted:#5c6577;
+      --primary:#1b66ff;
+      --primary-ink:#ffffff;
+      --primary-ghost:#e6efff;
+      --ring:#cfe0ff;
+      --ok:#0a7c2f;
+      --ok-ink:#ffffff;
+      --warn:#a35b00;
+      --note:#e9eef6;
+      --border:#e6eaf1;
+      --shadow: 0 6px 24px rgba(16, 24, 40, .06), 0 2px 8px rgba(16, 24, 40, .04);
       --radius:14px;
     }
     @media (prefers-color-scheme: dark){
       :root{
-        --bg:#0f1725; --card:#111a2c; --ink:#eef2fb; --muted:#9aa3b2;
-        --primary:#4a8dff; --primary-ink:#051126; --primary-ghost:#0e244a;
-        --ring:#234a94; --ok:#33d18f; --note:#16233b; --border:#1d2a42;
-        --shadow:0 10px 30px rgba(0,0,0,.45),0 2px 10px rgba(0,0,0,.35);
+        --bg:#0f1725;
+        --card:#111a2c;
+        --ink:#eef2fb;
+        --muted:#9aa3b2;
+        --primary:#4a8dff;
+        --primary-ink:#051126;
+        --primary-ghost:#0e244a;
+        --ring:#234a94;
+        --ok:#33d18f;
+        --ok-ink:#0b1a2b;
+        --note:#16233b;
+        --border:#1d2a42;
+        --shadow: 0 10px 30px rgba(0,0,0,.45), 0 2px 10px rgba(0,0,0,.35);
       }
     }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{
       margin:0;
-      font-family: ui-sans-serif,-apple-system,Segoe UI,Roboto,Inter,system-ui,Helvetica Neue,Arial,Noto Sans,Apple Color Emoji,Segoe UI Emoji;
+      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Inter, system-ui, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
       color:var(--ink);
       background:
         radial-gradient(1200px 600px at 10% -10%, #e9f1ff 0%, transparent 60%),
         radial-gradient(1000px 500px at 90% -20%, #f0fff5 0%, transparent 60%),
         var(--bg);
     }
-    .wrap{max-width:1160px;margin:40px auto 80px;padding:0 20px;}
-    header{margin-bottom:22px;}
-    header h1{margin:0 0 8px;font-weight:800;letter-spacing:.2px;line-height:1.1;font-size:clamp(28px,3.4vw,44px);}
-    header p{margin:0;color:var(--muted);font-size:clamp(14px,1.4vw,16px);}
-    .tabs{margin-top:20px;display:inline-flex;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px;box-shadow:var(--shadow);}
-    .tab{padding:10px 18px;border-radius:999px;color:var(--muted);background:transparent;border:0;font-weight:600;cursor:pointer;}
-    .tab[aria-selected="true"]{background:var(--primary);color:var(--primary-ink);box-shadow:inset 0 0 0 1px var(--ring);}
-    .card{margin-top:22px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;}
-    .grid{display:grid;gap:14px;}
-    @media (min-width:880px){.grid{grid-template-columns:1.2fr 1.1fr .9fr;align-items:end;}}
-    label{display:block;font-size:12px;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);margin:6px 0 8px;font-weight:700;}
-    input[type="text"],select,textarea{width:100%;border-radius:12px;border:1px solid var(--border);padding:12px 14px;font-size:16px;background:#fff;color:var(--ink);outline:none;transition:box-shadow .15s,border-color .15s,background-color .15s;}
-    @media (prefers-color-scheme: dark){input[type="text"],select,textarea{background:#0f1730;}}
-    input:focus,select:focus,textarea:focus{border-color:var(--ring);box-shadow:0 0 0 4px color-mix(in oklab, var(--ring) 25%, transparent);}
-    .btn{width:100%;padding:14px 16px;border-radius:12px;border:0;font-size:16px;font-weight:700;cursor:pointer;background:var(--primary);color:var(--primary-ink);box-shadow:0 6px 16px color-mix(in oklab, var(--primary) 24%, transparent);transition:transform .06s ease,box-shadow .15s ease,background .2s ease;}
-    .btn:disabled{opacity:.7;cursor:not-allowed;transform:none;box-shadow:none;}
-    .btn.secondary{background:var(--primary-ghost);color:var(--primary);box-shadow:none;border:1px solid var(--ring);width:auto;padding:8px 12px;}
-    .help{margin-top:12px;display:flex;align-items:center;gap:12px;color:var(--muted);font-size:14px;flex-wrap:wrap;}
-    .badge{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:var(--note);color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.3px;text-transform:uppercase;}
-    .inline-actions{display:flex;align-items:center;gap:14px;min-height:24px;margin-top:8px;}
-    .link{color:var(--primary);text-decoration:none;font-weight:700;}
-    .status{color:var(--muted);}
-    /* bulk */
-    .bulk-grid{display:grid;gap:14px;}
-    @media (min-width:980px){.bulk-grid{grid-template-columns:1.2fr 1fr;}}
-    textarea{min-height:200px;resize:vertical;}
-    .drop{border:1.5px dashed var(--border);border-radius:12px;padding:20px;text-align:center;color:var(--muted);background:color-mix(in oklab, var(--primary-ghost) 30%, transparent);}
-    .drop input{display:none;}
-    .row{display:grid;gap:14px;margin-top:10px;}
-    @media (min-width:980px){.row{grid-template-columns:1fr .9fr .9fr;}}
-    .footer-note{margin-top:12px;color:var(--muted);font-size:14px;}
+    .wrap{
+      max-width: 1160px;
+      margin: 40px auto 80px;
+      padding: 0 20px;
+    }
+    header{
+      margin-bottom: 22px;
+    }
+    header h1{
+      margin: 0 0 8px;
+      font-weight: 800;
+      letter-spacing: .2px;
+      line-height: 1.1;
+      font-size: clamp(28px, 3.4vw, 44px);
+    }
+    header p{
+      margin:0;
+      color: var(--muted);
+      font-size: clamp(14px, 1.4vw, 16px);
+    }
+    .tabs{
+      margin-top: 20px;
+      display: inline-flex;
+      gap: 10px;
+      background: var(--card);
+      border:1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px;
+      box-shadow: var(--shadow);
+    }
+    .tab{
+      padding: 10px 18px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: transparent;
+      border:0;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tab[aria-selected="true"]{
+      background: var(--primary);
+      color: var(--primary-ink);
+      box-shadow: inset 0 0 0 1px var(--ring);
+    }
+
+    .card{
+      margin-top: 22px;
+      background: var(--card);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .grid{
+      display: grid;
+      gap: 14px;
+    }
+    @media (min-width: 880px){
+      .grid{
+        grid-template-columns: 1.2fr 1.1fr .9fr;
+        align-items: end;
+      }
+    }
+    label{
+      display:block;
+      font-size: 12px;
+      letter-spacing: .3px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 6px 0 8px;
+      font-weight: 700;
+    }
+    input[type="text"], select, textarea{
+      width: 100%;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      padding: 12px 14px;
+      font-size: 16px;
+      background: #fff;
+      color: var(--ink);
+      outline: none;
+      transition: box-shadow .15s, border-color .15s, background-color .15s;
+    }
+    @media (prefers-color-scheme: dark){
+      input[type="text"], select, textarea{ background:#0f1730; }
+    }
+    input:focus, select:focus, textarea:focus{
+      border-color: var(--ring);
+      box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 25%, transparent);
+    }
+
+    .btn{
+      width:100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border:0;
+      font-size: 16px;
+      font-weight: 700;
+      cursor:pointer;
+      background: var(--primary);
+      color: var(--primary-ink);
+      box-shadow: 0 6px 16px color-mix(in oklab, var(--primary) 24%, transparent);
+      transition: transform .06s ease, box-shadow .15s ease, background .2s ease;
+    }
+    .btn:disabled{
+      opacity:.7;
+      cursor:not-allowed;
+      transform:none;
+      box-shadow:none;
+    }
+    .btn.secondary{
+      background: var(--primary-ghost);
+      color: var(--primary);
+      box-shadow: none;
+      border:1px solid var(--ring);
+    }
+
+    .help{
+      margin-top: 12px;
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      flex-wrap: wrap;
+    }
+    .badge{
+      padding: 6px 10px;
+      border-radius: 999px;
+      border:1px solid var(--border);
+      background: var(--note);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: .3px;
+      text-transform: uppercase;
+    }
+    .inline-actions{
+      display:flex;
+      align-items:center;
+      gap: 14px;
+      min-height: 24px;
+      margin-top: 8px;
+    }
+    .link{
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .status{ color: var(--muted); }
+    .ok{ color: var(--ok); font-weight:700; }
+
+    /* Bulk section */
+    .bulk-grid{ display:grid; gap:14px; }
+    @media (min-width: 980px){
+      .bulk-grid{ grid-template-columns: 1.2fr 1fr; }
+    }
+    textarea{
+      min-height: 200px;
+      resize: vertical;
+    }
+    .drop{
+      border:1.5px dashed var(--border);
+      border-radius:12px;
+      padding: 20px;
+      text-align:center;
+      color: var(--muted);
+      background: color-mix(in oklab, var(--primary-ghost) 30%, transparent);
+    }
+    .drop input{ display:none; }
+    .row{
+      display:grid; gap:14px; margin-top:10px;
+    }
+    @media (min-width: 980px){
+      .row{ grid-template-columns: 1fr .9fr .9fr; }
+    }
+    .footer-note{
+      margin-top: 12px; color:var(--muted); font-size:14px;
+    }
   </style>
 </head>
 <body>
@@ -89,7 +259,7 @@
           <div class="inline-actions">
             <span id="s-status" class="status"></span>
             <a id="s-maps" class="link" href="#" target="_blank" rel="noopener" style="display:none;">Open in Google Maps</a>
-            <button id="s-copy" class="btn secondary" style="display:none;">Copy link</button>
+            <button id="s-copy" class="btn secondary" style="width:auto; padding:8px 12px; display:none;">Copy link</button>
           </div>
         </div>
 
@@ -108,7 +278,7 @@
         </div>
       </div>
 
-      <div style="margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;">
+      <div style="margin-top:14px; display:flex; gap:14px; flex-wrap:wrap;">
         <button id="s-download" class="btn" style="max-width:280px;">Download</button>
       </div>
 
@@ -123,7 +293,7 @@
       <div class="bulk-grid">
         <div>
           <label for="b-rows">Paste CSV rows
-            <small style="font-weight:600;color:var(--muted);text-transform:none;">
+            <small style="font-weight:600; color:var(--muted); text-transform:none;">
               (header optional; columns: <code>assetId</code> or <code>assetId,dataset</code>)
             </small>
           </label>
@@ -139,7 +309,7 @@
           <div class="row">
             <div>
               <label for="b-dataset">Default dataset
-                <small style="font-weight:600;color:var(--muted);text-transform:none;">
+                <small style="font-weight:600; color:var(--muted); text-transform:none;">
                   (applies to rows without a dataset)
                 </small>
               </label>
@@ -155,7 +325,7 @@
               </select>
             </div>
 
-            <div style="display:flex;align-items:end;">
+            <div style="display:flex; align-items:end;">
               <button id="b-download" class="btn">Download</button>
             </div>
           </div>
@@ -175,147 +345,270 @@
   </div>
 
   <script>
-    // ----- Datasets (keys must match your backend) -----
+    // -----------------------------
+    // Dataset catalog (keys must match backend)
+    // -----------------------------
     const DATASETS = [
-      { group:"Fairfax County", items:[
-          { key:"fairfax_bmps", label:"Fairfax — Stormwater Facilities (FACILITY_ID)" }
-      ]},
-      { group:"MDOT SHA", items:[
-          { key:"mdsha_landscape", label:"MDOT SHA — Managed Landscape (LOD_ID)" }
-      ]},
-      { group:"MDOT SHA — TMDL", items:[
-          { key:"mdsha_tmdl_structures",           label:"MDOT SHA — TMDL — Stormwater Control Structures (SWM_FAC_NO)" },
-          { key:"mdsha_tmdl_retrofits",            label:"MDOT SHA — TMDL — Retrofits (SWM_FAC_NO)" },
-          { key:"mdsha_tmdl_tree_plantings",       label:"MDOT SHA — TMDL — Tree Plantings (STRU_ID)" },
-          { key:"mdsha_tmdl_pavement_removals",    label:"MDOT SHA — TMDL — Pavement Removals (STRU_ID)" },
-          { key:"mdsha_tmdl_stream_restorations",  label:"MDOT SHA — TMDL — Stream Restorations (STRU_ID)" },
-          { key:"mdsha_tmdl_outfall_stabilizations", label:"MDOT SHA — TMDL — Outfall Stabilizations (STRU_ID)" },
-      ]}
+      {
+        group: "Fairfax County",
+        items: [
+          {
+            key: "fairfax_bmps",
+            label: "Fairfax — Stormwater Facilities (FACILITY_ID)"
+          }
+        ]
+      },
+      {
+        group: "MDOT SHA",
+        items: [
+          { key: "mdsha_landscape", label: "MDOT SHA — Managed Landscape (LOD_ID)" }
+        ]
+      },
+      {
+        group: "MDOT SHA — TMDL",
+        items: [
+          { key: "mdsha_tmdl_structures",          label: "MDOT SHA — TMDL — Stormwater Control Structures (SWM_FAC_NO)" },
+          { key: "mdsha_tmdl_retrofits",            label: "MDOT SHA — TMDL — Retrofits (SWM_FAC_NO)" },
+          { key: "mdsha_tmdl_tree_plantings",       label: "MDOT SHA — TMDL — Tree Plantings (STRU_ID)" },
+          { key: "mdsha_tmdl_pavement_removals",    label: "MDOT SHA — TMDL — Pavement Removals (STRU_ID)" },
+          { key: "mdsha_tmdl_stream_restorations",  label: "MDOT SHA — TMDL — Stream Restorations (STRU_ID)" },
+          { key: "mdsha_tmdl_outfall_stabilizations", label: "MDOT SHA — TMDL — Outfall Stabilizations (STRU_ID)" },
+        ]
+      }
     ];
 
-    // ----- DOM -----
-    const tabSingle=document.getElementById('tab-single');
-    const tabBulk=document.getElementById('tab-bulk');
-    const panelSingle=document.getElementById('single');
-    const panelBulk=document.getElementById('bulk');
+    // -----------------------------
+    // DOM refs
+    // -----------------------------
+    const tabSingle = document.getElementById('tab-single');
+    const tabBulk   = document.getElementById('tab-bulk');
+    const panelSingle = document.getElementById('single');
+    const panelBulk   = document.getElementById('bulk');
 
-    const sAsset=document.getElementById('s-asset');
-    const sDataset=document.getElementById('s-dataset');
-    const sFormat=document.getElementById('s-format');
-    const sBtn=document.getElementById('s-download');
-    const sStatus=document.getElementById('s-status');
-    const sMaps=document.getElementById('s-maps');
-    const sCopy=document.getElementById('s-copy');
+    const sAsset   = document.getElementById('s-asset');
+    const sDataset = document.getElementById('s-dataset');
+    const sFormat  = document.getElementById('s-format');
+    const sBtn     = document.getElementById('s-download');
+    const sStatus  = document.getElementById('s-status');
+    const sMaps    = document.getElementById('s-maps');
+    const sCopy    = document.getElementById('s-copy');
 
-    const bRows=document.getElementById('b-rows');
-    const bFile=document.getElementById('b-file');
-    const bDataset=document.getElementById('b-dataset');
-    const bFormat=document.getElementById('b-format');
-    const bBtn=document.getElementById('b-download');
-    const bStatus=document.getElementById('b-status');
-    const bMapsCsv=document.getElementById('b-maps-csv');
+    const bRows    = document.getElementById('b-rows');
+    const bFile    = document.getElementById('b-file');
+    const bDataset = document.getElementById('b-dataset');
+    const bFormat  = document.getElementById('b-format');
+    const bBtn     = document.getElementById('b-download');
+    const bStatus  = document.getElementById('b-status');
+    const bMapsCsv = document.getElementById('b-maps-csv');
 
-    // ----- Helpers -----
-    function buildDatasetSelect(sel){
-      sel.innerHTML='';
-      DATASETS.forEach(g=>{
-        const og=document.createElement('optgroup'); og.label=g.group;
-        g.items.forEach(d=>{
-          const o=document.createElement('option'); o.value=d.key; o.textContent=d.label; og.appendChild(o);
+    // -----------------------------
+    // Helpers
+    // -----------------------------
+    function buildDatasetSelect(selectEl){
+      selectEl.innerHTML = '';
+      DATASETS.forEach(group => {
+        const og = document.createElement('optgroup');
+        og.label = group.group;
+        group.items.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.key;
+          opt.textContent = d.label;
+          og.appendChild(opt);
         });
-        sel.appendChild(og);
+        selectEl.appendChild(og);
       });
     }
-    function setTab(which){
-      const isS = which==='single';
-      tabSingle.setAttribute('aria-selected', String(isS));
-      tabBulk.setAttribute('aria-selected', String(!isS));
-      panelSingle.hidden=!isS; panelBulk.hidden=isS;
-      localStorage.setItem('mb_tab', which);
+
+    function setTab(active){
+      const isSingle = (active === 'single');
+      tabSingle.setAttribute('aria-selected', String(isSingle));
+      tabBulk.setAttribute('aria-selected', String(!isSingle));
+      panelSingle.hidden = !isSingle;
+      panelBulk.hidden = isSingle;
+      localStorage.setItem('mb_tab', active);
     }
+
     function persistSingle(){
       localStorage.setItem('mb_s_dataset', sDataset.value);
       localStorage.setItem('mb_s_format', sFormat.value);
     }
     function restoreSingle(){
       buildDatasetSelect(sDataset);
-      sDataset.value=localStorage.getItem('mb_s_dataset')||'fairfax_bmps';
-      sFormat.value=localStorage.getItem('mb_s_format')||'kml';
+      sDataset.value = localStorage.getItem('mb_s_dataset') || 'fairfax_bmps';
+      sFormat.value  = localStorage.getItem('mb_s_format')  || 'kml';
     }
+
     function persistBulk(){
       localStorage.setItem('mb_b_dataset', bDataset.value);
       localStorage.setItem('mb_b_format', bFormat.value);
     }
     function restoreBulk(){
       buildDatasetSelect(bDataset);
-      bDataset.value=localStorage.getItem('mb_b_dataset')||'fairfax_bmps';
-      bFormat.value=localStorage.getItem('mb_b_format')||'kmlzip';
+      bDataset.value = localStorage.getItem('mb_b_dataset') || 'fairfax_bmps';
+      bFormat.value  = localStorage.getItem('mb_b_format')  || 'kmlzip';
     }
 
-    // ----- API calls -----
+    // -----------------------------
+    // Single: locate + download
+    // -----------------------------
     async function locate(asset, dataset){
-      const r=await fetch('/api/locate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assetId:asset,dataset})});
-      if(!r.ok){let m=`Locate failed (HTTP ${r.status})`;try{const j=await r.json();if(j?.error)m=j.error;}catch{};throw new Error(m);}
+      const r = await fetch('/api/locate', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ assetId: asset, dataset })
+      });
+      if (!r.ok){
+        let msg = `Locate failed (HTTP ${r.status})`;
+        try { const j = await r.json(); if (j?.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
       return r.json();
     }
-    async function downloadSingle(asset,dataset,format){
-      const r=await fetch('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assetId:asset,dataset,format})});
-      if(!r.ok){let m=`Request failed (HTTP ${r.status})`;try{const j=await r.json();if(j?.error)m=j.error;}catch{};throw new Error(m);}
-      const blob=await r.blob();const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');
-      const ext=(format==='kml')?'kml':(format==='geojson'?'geojson':'zip');
-      a.href=url;a.download=`${asset}.${ext}`;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+
+    async function downloadSingle(asset, dataset, format){
+      const r = await fetch('/api/convert', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ assetId: asset, dataset, format })
+      });
+      if (!r.ok){
+        let msg = `Request failed (HTTP ${r.status})`;
+        try { const j = await r.json(); if (j?.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
+      const blob = await r.blob();
+      const url  = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      let ext = format === 'kml' ? 'kml' : (format === 'geojson' ? 'geojson' : 'zip');
+      a.href = url;
+      a.download = `${asset}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     }
 
-    sBtn.addEventListener('click',async()=>{
-      const asset=sAsset.value.trim(); const dataset=sDataset.value; const format=sFormat.value;
-      if(!asset){sStatus.textContent='Enter an asset / BMP ID';return;}
-      sBtn.disabled=true; sStatus.textContent='Locating…'; sMaps.style.display='none'; sCopy.style.display='none';
+    sBtn.addEventListener('click', async () => {
+      const asset = sAsset.value.trim();
+      const dataset = sDataset.value;
+      const format = sFormat.value;
+      if (!asset){ sStatus.textContent = 'Enter an asset / BMP ID'; return; }
+
+      sBtn.disabled = true;
+      sStatus.textContent = 'Locating…';
+      sMaps.style.display = 'none';
+      sCopy.style.display = 'none';
+
       try{
-        const info=await locate(asset,dataset);
-        if(info?.googleMapsUrl){
-          sMaps.href=info.googleMapsUrl; sMaps.style.display='inline';
-          sCopy.style.display='inline'; sCopy.onclick=()=>{navigator.clipboard.writeText(info.googleMapsUrl).then(()=>{sStatus.textContent='Google Maps link copied ✓';setTimeout(()=>sStatus.textContent='',1200);});};
+        const info = await locate(asset, dataset);
+        if (info?.googleMapsUrl){
+          sMaps.href = info.googleMapsUrl;
+          sMaps.style.display = 'inline';
+          sCopy.style.display = 'inline';
+          sCopy.onclick = () => {
+            navigator.clipboard.writeText(info.googleMapsUrl).then(()=>{
+              sStatus.textContent = 'Google Maps link copied ✓';
+              setTimeout(()=>{ sStatus.textContent=''; }, 1200);
+            });
+          }
         }
-        sStatus.textContent='Converting…';
-        await downloadSingle(asset,dataset,format);
-        sStatus.textContent='Done.';
-      }catch(e){sStatus.textContent=e.message||'Error';}
-      finally{sBtn.disabled=false;persistSingle();}
+        sStatus.textContent = 'Converting…';
+        await downloadSingle(asset, dataset, format);
+        sStatus.textContent = 'Done.';
+      }catch(err){
+        sStatus.textContent = err.message || 'Error';
+      }finally{
+        sBtn.disabled = false;
+        persistSingle();
+      }
     });
 
-    // bulk
+    // -----------------------------
+    // Bulk: parse + POST /api/bulk
+    // -----------------------------
     function parseCsvRows(text){
-      const out=[]; text.split(/\r?\n/).forEach(l=>{const s=l.trim(); if(!s)return; const p=s.split(',').map(t=>t.trim()).filter(Boolean); if(p.length===1) out.push({assetId:p[0]}); else out.push({assetId:p[0],dataset:p[1]});});
+      // Very light parser: supports "assetId" or "assetId,dataset"
+      const out = [];
+      text.split(/\r?\n/).forEach(line=>{
+        const s = line.trim();
+        if (!s) return;
+        const parts = s.split(',').map(t=>t.trim()).filter(Boolean);
+        if (parts.length === 1) out.push({ assetId: parts[0] });
+        else out.push({ assetId: parts[0], dataset: parts[1] });
+      });
       return out;
     }
-    bFile.addEventListener('change',async()=>{
-      const f=bFile.files?.[0]; if(!f) return; bRows.value=await f.text();
-    });
-    async function downloadBulk(payload){
-      const r=await fetch('/api/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      if(!r.ok){let m=`Bulk failed (HTTP ${r.status})`;try{const j=await r.json();if(j?.error)m=j.error;}catch{};throw new Error(m);}
-      const mapsCsv=r.headers.get('x-maps-csv'); const blob=await r.blob(); const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download=`mapbuddy_${payload.format}.zip`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      return {mapsCsv};
-    }
-    bBtn.addEventListener('click',async()=>{
-      const items=parseCsvRows(bRows.value); if(!items.length){bStatus.textContent='No rows';return;}
-      const defaultDataset=bDataset.value; const format=bFormat.value;
-      bBtn.disabled=true; bStatus.textContent='Building…'; bMapsCsv.style.display='none';
-      try{
-        const {mapsCsv}=await downloadBulk({items,defaultDataset,format});
-        bStatus.textContent='Done.'; if(mapsCsv){bMapsCsv.href=mapsCsv; bMapsCsv.style.display='inline';}
-      }catch(e){bStatus.textContent=e.message||'Error';}
-      finally{bBtn.disabled=false; persistBulk();}
+
+    bFile.addEventListener('change', async (e)=>{
+      const file = bFile.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      bRows.value = text;
     });
 
-    // init
-    (function(){
-      tabSingle.addEventListener('click',()=>setTab('single'));
-      tabBulk.addEventListener('click',()=>setTab('bulk'));
-      setTab(localStorage.getItem('mb_tab')||'single');
-      restoreSingle(); restoreBulk();
+    async function downloadBulk(payload){
+      const r = await fetch('/api/bulk', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok){
+        let msg = `Bulk failed (HTTP ${r.status})`;
+        try{ const j = await r.json(); if (j?.error) msg = j.error; }catch{}
+        throw new Error(msg);
+      }
+      // returns zip (binary) and optional mapsCsvUrl in headers? In our implementation,
+      // we stream the zip; a separate JSON endpoint gave CSV earlier; now the UI expects
+      // the server to respond with zip (body) and mapsCsvUrl (header 'x-maps-csv').
+      const mapsCsv = r.headers.get('x-maps-csv');
+      const blob    = await r.blob();
+      const url     = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `mapbuddy_${payload.format}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      return { mapsCsv };
+    }
+
+    bBtn.addEventListener('click', async ()=>{
+      const items = parseCsvRows(bRows.value);
+      if (!items.length){
+        bStatus.textContent = 'No rows';
+        return;
+      }
+      const defaultDataset = bDataset.value;
+      const format = bFormat.value; // 'kmlzip' | 'geojsonzip' | 'shz'
+      bBtn.disabled = true;
+      bStatus.textContent = 'Building…';
+      bMapsCsv.style.display = 'none';
+
+      try{
+        const { mapsCsv } = await downloadBulk({ items, defaultDataset, format });
+        bStatus.textContent = 'Done.';
+        if (mapsCsv){
+          bMapsCsv.href = mapsCsv;
+          bMapsCsv.style.display = 'inline';
+        }
+      }catch(err){
+        bStatus.textContent = err.message || 'Error';
+      }finally{
+        bBtn.disabled = false;
+        persistBulk();
+      }
+    });
+
+    // -----------------------------
+    // Init
+    // -----------------------------
+    (function init(){
+      // tabs
+      tabSingle.addEventListener('click', ()=> setTab('single'));
+      tabBulk.addEventListener('click',   ()=> setTab('bulk'));
+      const savedTab = localStorage.getItem('mb_tab') || 'single';
+      setTab(savedTab);
+
+      restoreSingle();
+      restoreBulk();
     })();
   </script>
 </body>
