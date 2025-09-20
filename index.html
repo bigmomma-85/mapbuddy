@@ -359,71 +359,111 @@
     return res;
   }
 
-  async function runSingle() {
-    if ($("singleRunBtn").disabled) return;
+ async function runSingle() {
+  if ($("singleRunBtn").disabled) return;
 
-    const dataset = $("singleDataset").value;
-    const assetId = normalizeIdForDataset($("singleAsset").value, dataset);
-    const formats = [];
-    if ($("fmtKmlSingle").checked) formats.push("kml");
-    if ($("fmtGeoSingle").checked) formats.push("geojson");
-    if ($("fmtShpSingle").checked) formats.push("shpzip");
+  // Read exactly what the user typed — no forced normalization for single.
+  let dataset = $("singleDataset").value;
+  let assetId = ($("singleAsset").value || "").trim();
 
-    $("singleRunBtn").disabled = true;
-    $("singleRunBtn").textContent = "Generating Files…";
-    $("gmWrap")?.classList.add("hidden");
+  const formats = [];
+  if ($("fmtKmlSingle").checked) formats.push("kml");
+  if ($("fmtGeoSingle").checked) formats.push("geojson");
+  if ($("fmtShpSingle").checked) formats.push("shpzip");
 
-    let foundLatLng = null;
-    let usedDataset = dataset;
+  $("singleRunBtn").disabled = true;
+  $("singleRunBtn").textContent = "Locating…";
+  $("gmWrap")?.classList.add("hidden");
 
-    try {
-      for (const fmt of formats) {
-        let res;
-        try {
-          // First attempt: selected dataset
-          res = await trySingleOnce(dataset, assetId, fmt);
-        } catch (e1) {
-          // If TMDL and 404 'No feature found' → fallback search other TMDL datasets
-          const likelyNotFound = (e1.status === 404) && isTmdlDataset(dataset) && /No feature found/i.test(e1.detail || "");
-          if (likelyNotFound) {
-            for (const alt of TMDL_DATASETS) {
-              if (alt === dataset) continue;
-              try {
-                res = await trySingleOnce(alt, assetId, fmt);
-                usedDataset = alt;
-                // small toast
-                console.warn(`Auto-switched TMDL dataset: ${dataset} → ${alt}`);
-                break;
-              } catch { /* keep trying */ }
-            }
-          }
-          if (!res) throw e1; // rethrow if all failed
-        }
+  // 1) Warm-up & resolve via /api/locate (this mirrors your old working flow)
+  let info = null;
+  try {
+    const r = await fetch("/api/locate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId, dataset }),
+    });
+    if (!r.ok) {
+      let msg = `Locate failed (HTTP ${r.status})`;
+      try { const err = await r.json(); if (err?.error) msg = err.error; } catch {}
+      throw new Error(msg);
+    }
+    info = await r.json();
 
-        // Clone once so we can both parse and download
-        const resClone = res.clone();
+    // If backend returns canonical values, use them (common for TMDL)
+    if (info?.dataset) dataset = info.dataset;
+    if (info?.assetId) assetId = info.assetId;
 
-        // Download file
-        const blob = await res.blob();
-        const ext = fmt === "shpzip" ? "zip" : fmt;
-        downloadBlobAs(blob, `mapbuddy_${assetId}.${ext}`);
+    // Prefer server-provided Maps link (like your old UI)
+    if (info?.googleMapsUrl) {
+      $("gmLinkText").textContent = info.googleMapsUrl;
+      $("gmOpen").onclick = () => window.open(info.googleMapsUrl, "_blank", "noopener");
+      $("gmCopy").onclick = async () => {
+        try { await navigator.clipboard.writeText(info.googleMapsUrl); alert("Google Maps link copied."); }
+        catch { alert(info.googleMapsUrl); }
+      };
+      $("gmWrap").classList.remove("hidden");
+    }
+  } catch (err) {
+    alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}`);
+    $("singleRunBtn").textContent = "Generate Map Files";
+    $("singleRunBtn").disabled = false;
+    return;
+  }
 
-        // Try to compute GM link coordinates (KML/GeoJSON only)
-        if (!foundLatLng && (fmt === "kml" || fmt === "geojson")) {
-          const txt = await resClone.text();
-          if (fmt === "geojson") {
-            foundLatLng = parseGeoJSONForLatLng(txt);
-          } else if (fmt === "kml") {
-            foundLatLng = parseKMLForLatLng(txt);
-          }
-        }
+  // 2) Convert (IMPORTANT: no defaultDataset on single)
+  $("singleRunBtn").textContent = "Converting…";
+
+  let foundLatLng = null; // fallback if locate didn't give a URL
+  try {
+    for (const fmt of formats) {
+      const body = { assetId, dataset, format: fmt };
+      const resp = await fetch("/api/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        let detail = "";
+        try { detail = await resp.json(); } catch {}
+        const detailStr = typeof detail === "object" ? JSON.stringify(detail) : (detail || "");
+        throw new Error(`/api/convert → ${resp.status} ${detailStr}\nPayload: ${JSON.stringify(body)}`);
       }
 
+      // Clone for geometry parsing if we still need a coords link
+      const respClone = resp.clone();
+
+      const blob = await resp.blob();
+      const ext = fmt === "shpzip" ? "zip" : fmt;
+      downloadBlobAs(blob, `mapbuddy_${assetId}.${ext}`);
+
+      // If locate did not give GM link, try to extract geometry now
+      if (!info?.googleMapsUrl && !foundLatLng && (fmt === "kml" || fmt === "geojson")) {
+        const txt = await respClone.text();
+        if (fmt === "geojson") {
+          foundLatLng = parseGeoJSONForLatLng(txt);
+        } else if (fmt === "kml") {
+          foundLatLng = parseKMLForLatLng(txt);
+        }
+      }
+    }
+
+    // Build a GM link if locate didn't provide one
+    if (!info?.googleMapsUrl) {
       if (foundLatLng) {
-        showGmapsLinkFromLatLng(foundLatLng.lat, foundLatLng.lon, `${assetId} ${usedDataset}`);
+        const { lat, lon } = foundLatLng;
+        const gmUrl = `https://www.google.com/maps?q=${encodeURIComponent(lat)},${encodeURIComponent(lon)}(${encodeURIComponent(assetId + " " + dataset)})`;
+        $("gmLinkText").textContent = gmUrl;
+        $("gmOpen").onclick = () => window.open(gmUrl, "_blank", "noopener");
+        $("gmCopy").onclick = async () => {
+          try { await navigator.clipboard.writeText(gmUrl); alert("Google Maps link copied."); }
+          catch { alert(gmUrl); }
+        };
+        $("gmWrap").classList.remove("hidden");
       } else {
-        // Fallback (rare): keep a text-search link, but mark as fallback.
-        const gmUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + " " + usedDataset)}`;
+        // Last-resort fallback (text search)
+        const gmUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + " " + dataset)}`;
         $("gmLinkText").textContent = gmUrl + "  (fallback search)";
         $("gmOpen").onclick = () => window.open(gmUrl, "_blank", "noopener");
         $("gmCopy").onclick = async () => {
@@ -432,18 +472,14 @@
         };
         $("gmWrap").classList.remove("hidden");
       }
-
-      if (usedDataset !== dataset) {
-        // Inform user we found it elsewhere
-        alert(`Heads up: '${assetId}' was found under ${usedDataset} (not ${dataset}).`);
-      }
-    } catch (err) {
-      alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}`);
-    } finally {
-      $("singleRunBtn").textContent = "Generate Map Files";
-      $("singleRunBtn").disabled = false;
     }
+  } catch (err) {
+    alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}`);
+  } finally {
+    $("singleRunBtn").textContent = "Generate Map Files";
+    $("singleRunBtn").disabled = false;
   }
+}
   $("singleRunBtn")?.addEventListener("click", runSingle);
 
   // ---------- BULK ----------
