@@ -1,27 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>MapBuddy - Asset to Map File Converter</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'map-blue': '#2563eb',
-            'map-green': '#059669',
-            'map-orange': '#ea580c'
-          }
-        }
-      }
+      theme: { extend: { colors: { 'map-blue':'#2563eb','map-green':'#059669','map-orange':'#ea580c' } } }
     }
   </script>
-  <style>
-    /* subtle focus ring consistency */
-    .ring-focus:focus{outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.2)}
-  </style>
+  <style>.ring-focus:focus{outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.2)}</style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
   <!-- Header -->
@@ -30,15 +19,11 @@
       <div class="flex justify-between items-center py-6">
         <div class="flex items-center space-x-3">
           <div class="w-10 h-10 bg-gradient-to-r from-map-blue to-map-green rounded-lg flex items-center justify-center">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-            </svg>
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
           </div>
           <h1 class="text-2xl font-bold text-gray-900">MapBuddy</h1>
         </div>
-        <div class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-          Internal Use Only
-        </div>
+        <div class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Internal Use Only</div>
       </div>
     </div>
   </header>
@@ -75,11 +60,12 @@
       <div id="singleMode" class="bg-white rounded-2xl shadow-xl p-8 mb-8">
         <h3 class="text-2xl font-bold text-gray-900 mb-6 text-center">Single Asset Conversion</h3>
 
+        <div id="singleError" class="hidden mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm"></div>
+
         <div class="max-w-2xl mx-auto space-y-6">
           <div>
             <label class="block text-sm font-semibold text-gray-700 mb-2">Dataset</label>
             <select id="datasetSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg ring-focus focus:ring-2 focus:ring-map-blue focus:border-transparent">
-              <!-- replaced with your datasets -->
               <option value="">Select Dataset</option>
               <optgroup label="Fairfax">
                 <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
@@ -128,13 +114,11 @@
           </button>
         </div>
 
-        <!-- Google Maps Link (hidden until generated) -->
+        <!-- Google Maps Link (hidden until ready) -->
         <div id="googleMapsSection" class="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-xl hidden">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                <span class="text-xl">🌍</span>
-              </div>
+              <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center"><span class="text-xl">🌍</span></div>
               <div>
                 <h4 class="font-semibold text-gray-900">Google Maps Link</h4>
                 <p class="text-sm text-gray-600">View asset location on Google Maps</p>
@@ -142,15 +126,11 @@
             </div>
             <div class="flex space-x-3">
               <button id="copyGmapsBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                </svg>
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                 Copy Link
               </button>
               <a id="openGmapsBtn" target="_blank" rel="noopener" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                </svg>
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                 Open Maps
               </a>
             </div>
@@ -163,7 +143,7 @@
         <h3 class="text-2xl font-bold text-gray-900 mb-6 text-center">Bulk Asset Conversion</h3>
 
         <div class="grid md:grid-cols-2 gap-8">
-          <!-- Upload column -->
+          <!-- Upload -->
           <div class="space-y-6">
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Dataset</label>
@@ -186,14 +166,12 @@
               </select>
             </div>
 
-            <!-- CSV upload area -->
+            <!-- CSV upload -->
             <div id="csvUploadArea" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-map-blue transition-colors cursor-pointer">
-              <input id="csvFileInput" type="file" accept=".csv" class="hidden" />
+              <input id="csvFileInput" type="file" accept=".csv" class="hidden"/>
               <div class="flex flex-col items-center">
                 <div class="w-12 h-12 bg-gradient-to-r from-map-blue to-map-green rounded-full flex items-center justify-center mb-4">
-                  <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                  </svg>
+                  <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
                 </div>
                 <h4 class="text-lg font-semibold text-gray-900 mb-2">Drop your CSV file here</h4>
                 <p class="text-gray-500 mb-4">or click to browse</p>
@@ -215,40 +193,22 @@
             </div>
           </div>
 
-          <!-- Format column -->
+          <!-- Format -->
           <div class="space-y-6">
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-4">Output Formats</label>
               <div class="space-y-3">
                 <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-blue transition-colors">
                   <input type="checkbox" name="bulkFormat" value="kml" class="mr-4 text-map-blue">
-                  <div class="flex items-center">
-                    <span class="text-2xl mr-3">🗺️</span>
-                    <div>
-                      <div class="font-medium">KML Files</div>
-                      <div class="text-sm text-gray-500">Google Earth format</div>
-                    </div>
-                  </div>
+                  <div class="flex items-center"><span class="text-2xl mr-3">🗺️</span><div><div class="font-medium">KML Files</div><div class="text-sm text-gray-500">Google Earth format</div></div></div>
                 </label>
                 <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-green transition-colors">
                   <input type="checkbox" name="bulkFormat" value="geojson" class="mr-4 text-map-green">
-                  <div class="flex items-center">
-                    <span class="text-2xl mr-3">📊</span>
-                    <div>
-                      <div class="font-medium">GeoJSON Files</div>
-                      <div class="text-sm text-gray-500">Web mapping format</div>
-                    </div>
-                  </div>
+                  <div class="flex items-center"><span class="text-2xl mr-3">📊</span><div><div class="font-medium">GeoJSON Files</div><div class="text-sm text-gray-500">Web mapping format</div></div></div>
                 </label>
                 <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-orange transition-colors">
                   <input type="checkbox" name="bulkFormat" value="shapefile" class="mr-4 text-map-orange">
-                  <div class="flex items-center">
-                    <span class="text-2xl mr-3">🗃️</span>
-                    <div>
-                      <div class="font-medium">Shapefile</div>
-                      <div class="text-sm text-gray-500">GIS standard format</div>
-                    </div>
-                  </div>
+                    <div class="flex items-center"><span class="text-2xl mr-3">🗃️</span><div><div class="font-medium">Shapefile</div><div class="text-sm text-gray-500">GIS standard format</div></div></div>
                 </label>
               </div>
             </div>
@@ -260,15 +220,17 @@
             Process Bulk Conversion
           </button>
         </div>
+
+        <div id="bulkError" class="hidden mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm"></div>
       </div>
     </div>
   </section>
 
   <script>
-    /***************
-     * CONFIG
-     ***************/
-    // Map UI values -> backend dataset codes (adjust if your backend differs)
+    /* ================= CONFIG ================= */
+    const API_BASE = ''; // e.g. '' or '/mapbuddy'
+
+    // dataset codes your API expects
     const DATASETS = {
       fairfax_bmps: 'fairfax_bmps',
       mdsha_landscape: 'mdsha_landscape',
@@ -280,257 +242,276 @@
       tmdl_outfall_stabilizations: 'tmdl_outfall_stabilizations'
     };
 
-    // If your API expects different strings, tweak here:
-    const FORMAT_PARAM = {
-      kml: 'kml',
-      geojson: 'geojson',
-      shapefile: 'shapefile' // change to 'shp' or 'shpzip' if your API expects that
-    };
+    // format tokens for your backend
+    const SINGLE_FORMAT = { kml:'kml', geojson:'geojson', shapefile:'shpzip' };
+    const BULK_FORMAT   = { kml:'kmlzip', geojson:'geojson', shapefile:'shpzip' };
 
-    // Endpoints (same-origin)
-    const SINGLE_ENDPOINT = ({assetId, dataset, format}) =>
-      `/api/single?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(dataset)}&format=${encodeURIComponent(format)}`;
-    const BULK_ENDPOINT = `/api/bulk`;
-    const LINK_ENDPOINT = ({assetId, dataset}) =>
-      `/api/link?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(dataset)}`;
+    const SINGLE_URL = (q) => `${API_BASE}/api/single?assetId=${encodeURIComponent(q.assetId)}&dataset=${encodeURIComponent(q.dataset)}&format=${encodeURIComponent(q.format)}`;
+    const BULK_ENDPOINTS = [
+      ({format,defaultDataset}) => `${API_BASE}/api/bulk`,
+      ({format,defaultDataset}) => `${API_BASE}/api/bulk?format=${encodeURIComponent(format)}&defaultDataset=${encodeURIComponent(defaultDataset)}`,
+      ({format,defaultDataset}) => `${API_BASE}/api/bulk/${encodeURIComponent(format)}?defaultDataset=${encodeURIComponent(defaultDataset)}`
+    ];
+    const MAP_LINK_ENDPOINTS = [
+      ({assetId,dataset}) => `${API_BASE}/api/link?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(dataset)}`,
+      ({assetId,dataset}) => `${API_BASE}/api/maps-link?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(dataset)}`,
+      ({assetId,dataset}) => `${API_BASE}/api/link/single?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(dataset)}`
+    ];
 
-    /***************
-     * Mode toggle
-     ***************/
-    const singleModeBtn = document.getElementById('singleModeBtn');
-    const bulkModeBtn   = document.getElementById('bulkModeBtn');
-    const singleMode    = document.getElementById('singleMode');
-    const bulkMode      = document.getElementById('bulkMode');
+    /* ============== Mode toggle ============== */
+    const singleModeBtn=document.getElementById('singleModeBtn');
+    const bulkModeBtn=document.getElementById('bulkModeBtn');
+    const singleMode=document.getElementById('singleMode');
+    const bulkMode=document.getElementById('bulkMode');
+    singleModeBtn.addEventListener('click',()=>{singleModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');singleModeBtn.classList.remove('text-gray-600');bulkModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');bulkModeBtn.classList.add('text-gray-600');singleMode.classList.remove('hidden');bulkMode.classList.add('hidden')});
+    bulkModeBtn.addEventListener('click',()=>{bulkModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');bulkModeBtn.classList.remove('text-gray-600');singleModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');singleModeBtn.classList.add('text-gray-600');bulkMode.classList.remove('hidden');singleMode.classList.add('hidden')});
 
-    singleModeBtn.addEventListener('click', () => {
-      singleModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      singleModeBtn.classList.remove('text-gray-600');
-      bulkModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      bulkModeBtn.classList.add('text-gray-600');
+    /* ============== Single ============== */
+    const datasetSelect=document.getElementById('datasetSelect');
+    const assetNumber=document.getElementById('assetNumber');
+    const singleConvertBtn=document.getElementById('singleConvertBtn');
+    const formatCheckboxes=document.querySelectorAll('input[name="format"]');
+    const singleError=document.getElementById('singleError');
+    const gmapsSection=document.getElementById('googleMapsSection');
+    const copyGmapsBtn=document.getElementById('copyGmapsBtn');
+    const openGmapsBtn=document.getElementById('openGmapsBtn');
+    let gmapsUrl='';
 
-      singleMode.classList.remove('hidden');
-      bulkMode.classList.add('hidden');
-    });
-
-    bulkModeBtn.addEventListener('click', () => {
-      bulkModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      bulkModeBtn.classList.remove('text-gray-600');
-      singleModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      singleModeBtn.classList.add('text-gray-600');
-
-      bulkMode.classList.remove('hidden');
-      singleMode.classList.add('hidden');
-    });
-
-    /***************
-     * Single mode
-     ***************/
-    const datasetSelect     = document.getElementById('datasetSelect');
-    const assetNumber       = document.getElementById('assetNumber');
-    const singleConvertBtn  = document.getElementById('singleConvertBtn');
-    const formatCheckboxes  = document.querySelectorAll('input[name="format"]');
-    const gmapsSection      = document.getElementById('googleMapsSection');
-    const copyGmapsBtn      = document.getElementById('copyGmapsBtn');
-    const openGmapsBtn      = document.getElementById('openGmapsBtn');
-    let currentGmapsUrl     = '';
-
-    function canRunSingle() {
-      const hasDataset = !!datasetSelect.value;
-      const hasAsset   = !!assetNumber.value.trim();
-      const hasFormat  = Array.from(formatCheckboxes).some(cb => cb.checked);
-      singleConvertBtn.disabled = !(hasDataset && hasAsset && hasFormat);
+    function canRunSingle(){
+      const d=datasetSelect.value.trim();
+      const a=assetNumber.value.trim();
+      const f=Array.from(formatCheckboxes).some(cb=>cb.checked);
+      singleConvertBtn.disabled=!(d&&a&&f);
     }
-    datasetSelect.addEventListener('change', canRunSingle);
-    assetNumber.addEventListener('input', canRunSingle);
-    formatCheckboxes.forEach(cb => cb.addEventListener('change', canRunSingle));
+    datasetSelect.addEventListener('change',canRunSingle);
+    assetNumber.addEventListener('input',canRunSingle);
+    formatCheckboxes.forEach(cb=>cb.addEventListener('change',canRunSingle));
 
-    singleConvertBtn.addEventListener('click', async () => {
-      if (singleConvertBtn.disabled) return;
+    singleConvertBtn.addEventListener('click', async ()=>{
+      if(singleConvertBtn.disabled) return;
+      singleError.classList.add('hidden'); singleError.textContent='';
+      gmapsSection.classList.add('hidden'); gmapsUrl='';
 
-      const datasetCode = DATASETS[datasetSelect.value] || datasetSelect.value;
-      const id = assetNumber.value.trim();
-      const selected = Array.from(formatCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+      const assetId=assetNumber.value.trim().toUpperCase();
+      const dataset=DATASETS[datasetSelect.value]||datasetSelect.value;
+      const selected=Array.from(formatCheckboxes).filter(cb=>cb.checked).map(cb=>cb.value);
 
-      singleConvertBtn.textContent = 'Generating Files...';
-      singleConvertBtn.disabled = true;
+      singleConvertBtn.textContent='Generating Files...';
+      singleConvertBtn.disabled=true;
 
-      try {
-        // trigger a download for each format (sequential to keep it tidy)
-        for (const fmt of selected) {
-          const param = FORMAT_PARAM[fmt] || fmt;
-          const url   = SINGLE_ENDPOINT({ assetId: id, dataset: datasetCode, format: param });
-          // Create a hidden anchor to honor Content-Disposition
-          const a = document.createElement('a');
-          a.href = url;
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          // small delay so multiple downloads don't trip popup blockers
-          await new Promise(r => setTimeout(r, 350));
+      try{
+        for(const fmt of selected){
+          const format=SINGLE_FORMAT[fmt]||fmt;
+
+          // Try GET first (file stream)
+          let fetched=false;
+          try{
+            const url=SINGLE_URL({assetId,dataset,format});
+            const a=document.createElement('a'); a.href=url; a.style.display='none'; document.body.appendChild(a); a.click(); a.remove();
+            fetched=true;
+          }catch{ /* noop */ }
+
+          // Fallback to POST returning blob
+          if(!fetched){
+            const res=await fetch(`${API_BASE}/api/single`,{
+              method:'POST',
+              headers:{'Content-Type':'application/json','Accept':'*/*'},
+              body:JSON.stringify({assetId,dataset,format})
+            });
+            if(!res.ok){
+              const txt=await safeText(res);
+              throw new Error(`Single ${format} failed ${res.status}: ${txt}`);
+            }
+            const blob=await res.blob();
+            const name=getFilename(res.headers) || `${assetId}_${format}.zip`;
+            downloadBlob(blob,name);
+          }
+          await delay(300);
         }
 
-        // fetch Google Maps link and reveal section (best effort)
-        try {
-          const r = await fetch(LINK_ENDPOINT({ assetId: id, dataset: datasetCode }));
-          if (r.ok) {
-            const j = await r.json();
-            if (j && j.url) {
-              currentGmapsUrl = j.url;
-              openGmapsBtn.href = currentGmapsUrl;
-              gmapsSection.classList.remove('hidden');
+        // Maps link (best-effort)
+        for(const build of MAP_LINK_ENDPOINTS){
+          try{
+            const r=await fetch(build({assetId,dataset}));
+            if(r.ok){
+              const j=await r.json();
+              if(j?.url){ gmapsUrl=j.url; openGmapsBtn.href=gmapsUrl; gmapsSection.classList.remove('hidden'); break; }
             }
-          }
-        } catch {}
+          }catch{}
+        }
 
-        singleConvertBtn.textContent = 'Download Again';
-      } catch (e) {
-        alert('Download failed. Please retry.');
-        console.error(e);
-        singleConvertBtn.textContent = 'Generate Map Files';
-      } finally {
-        singleConvertBtn.disabled = false;
+        singleConvertBtn.textContent='Download Again';
+      }catch(err){
+        singleError.textContent=err.message;
+        singleError.classList.remove('hidden');
+        singleConvertBtn.textContent='Generate Map Files';
+      }finally{
+        singleConvertBtn.disabled=false;
       }
     });
 
-    copyGmapsBtn.addEventListener('click', async () => {
-      if (!currentGmapsUrl) return;
-      try {
-        await navigator.clipboard.writeText(currentGmapsUrl);
-        copyGmapsBtn.textContent = 'Copied!';
-        setTimeout(() => (copyGmapsBtn.textContent = 'Copy Link'), 1200);
-      } catch {}
+    copyGmapsBtn.addEventListener('click', async ()=>{
+      if(!gmapsUrl) return;
+      try{ await navigator.clipboard.writeText(gmapsUrl); copyGmapsBtn.textContent='Copied!'; setTimeout(()=>copyGmapsBtn.textContent='Copy Link',1200);}catch{}
     });
 
-    /***************
-     * Bulk mode
-     ***************/
-    const csvUploadArea     = document.getElementById('csvUploadArea');
-    const csvFileInput      = document.getElementById('csvFileInput');
-    const chooseCsvBtn      = document.getElementById('chooseCsvBtn');
-    const csvStatus         = document.getElementById('csvStatus');
-    const bulkDatasetSelect = document.getElementById('bulkDatasetSelect');
-    const bulkConvertBtn    = document.getElementById('bulkConvertBtn');
-    const bulkFormatCbs     = document.querySelectorAll('input[name="bulkFormat"]');
+    /* ============== Bulk ============== */
+    const bulkDatasetSelect=document.getElementById('bulkDatasetSelect');
+    const csvUploadArea=document.getElementById('csvUploadArea');
+    const csvFileInput=document.getElementById('csvFileInput');
+    const chooseCsvBtn=document.getElementById('chooseCsvBtn');
+    const csvStatus=document.getElementById('csvStatus');
+    const bulkConvertBtn=document.getElementById('bulkConvertBtn');
+    const bulkError=document.getElementById('bulkError');
+    const bulkFormatCbs=document.querySelectorAll('input[name="bulkFormat"]');
 
-    let bulkItems = []; // parsed from CSV
+    let bulkRows=[];
 
-    chooseCsvBtn.addEventListener('click', () => csvFileInput.click());
-    csvUploadArea.addEventListener('click', (e) => {
-      // only trigger file dialog if user didn't click the button (which already does it)
-      if (e.target === csvUploadArea) csvFileInput.click();
-    });
+    chooseCsvBtn.addEventListener('click',()=>csvFileInput.click());
+    csvUploadArea.addEventListener('click',e=>{ if(e.target===csvUploadArea) csvFileInput.click(); });
 
-    csvFileInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      bulkItems = parseCsvToItems(text);
-      csvStatus.textContent = `Loaded ${bulkItems.length} assets`;
+    csvFileInput.addEventListener('change', async (e)=>{
+      const file=e.target.files?.[0]; if(!file) return;
+      const text=await file.text();
+      bulkRows=parseCsv(text);
+      csvStatus.textContent=`Loaded ${bulkRows.length} assets`;
       csvUploadArea.classList.add('border-map-blue','bg-blue-50');
       checkBulkReady();
     });
 
-    function parseCsvToItems(csvText) {
-      const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (lines.length === 0) return [];
-      // detect header (if first col not an asset-like string, treat as header)
-      let start = 0;
-      if (/asset/i.test(lines[0]) || /id/i.test(lines[0])) start = 1;
-
-      const items = [];
-      for (let i = start; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
-        if (!cols[0]) continue;
-        const assetId = cols[0];
-        let dataset   = cols[1] ? normalizeDataset(cols[1]) : null;
-        items.push(dataset ? { assetId, dataset } : { assetId });
+    function parseCsv(text){
+      const rows=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+      if(rows.length===0) return [];
+      let i=0; if(/asset|id/i.test(rows[0])) i=1;
+      const out=[];
+      for(;i<rows.length;i++){
+        const cols=rows[i].split(/[;,]|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.replace(/^"|"$/g,'').trim());
+        if(!cols[0]) continue;
+        const assetId=cols[0].toUpperCase();
+        const dsRaw=(cols[1]||'').trim();
+        const ds = normalizeDataset(dsRaw);
+        out.push(ds ? {assetId,dataset:ds} : {assetId});
       }
-      return items;
+      return out;
     }
-
-    function normalizeDataset(val) {
-      // Accept either dataset code or a label; return a known code or null
-      if (!val) return null;
-      const v = val.toLowerCase();
-      // by code
-      for (const k of Object.keys(DATASETS)) {
-        if (v === k.toLowerCase() || v === DATASETS[k].toLowerCase()) return DATASETS[k];
+    function normalizeDataset(v){
+      if(!v) return null; const s=v.toLowerCase();
+      for(const k of Object.keys(DATASETS)){
+        if(s===k.toLowerCase() || s===DATASETS[k].toLowerCase()) return DATASETS[k];
       }
-      // by label fragments
-      if (v.includes('fairfax')) return DATASETS.fairfax_bmps;
-      if (v.includes('managed') || v.includes('landscape')) return DATASETS.mdsha_landscape;
-      if (v.includes('control')) return DATASETS.tmdl_scs;
-      if (v.includes('retrofit')) return DATASETS.tmdl_retrofits;
-      if (v.includes('tree')) return DATASETS.tmdl_tree_plantings;
-      if (v.includes('pavement')) return DATASETS.tmdl_pavement_removals;
-      if (v.includes('stream')) return DATASETS.tmdl_stream_restorations;
-      if (v.includes('outfall')) return DATASETS.tmdl_outfall_stabilizations;
+      if(s.includes('fairfax')) return DATASETS.fairfax_bmps;
+      if(s.includes('landscape')) return DATASETS.mdsha_landscape;
+      if(s.includes('control')) return DATASETS.tmdl_scs;
+      if(s.includes('retrofit')) return DATASETS.tmdl_retrofits;
+      if(s.includes('tree')) return DATASETS.tmdl_tree_plantings;
+      if(s.includes('pavement')) return DATASETS.tmdl_pavement_removals;
+      if(s.includes('stream')) return DATASETS.tmdl_stream_restorations;
+      if(s.includes('outfall')) return DATASETS.tmdl_outfall_stabilizations;
       return null;
     }
-
-    function checkBulkReady() {
-      const hasCsv    = bulkItems.length > 0;
-      const hasDs     = !!bulkDatasetSelect.value;
-      const hasFormat = Array.from(bulkFormatCbs).some(cb => cb.checked);
-      bulkConvertBtn.disabled = !(hasCsv && hasDs && hasFormat);
+    function checkBulkReady(){
+      const hasCsv=bulkRows.length>0;
+      const hasDs=!!bulkDatasetSelect.value;
+      const hasFmt=Array.from(bulkFormatCbs).some(cb=>cb.checked);
+      bulkConvertBtn.disabled=!(hasCsv&&hasDs&&hasFmt);
     }
-    bulkDatasetSelect.addEventListener('change', checkBulkReady);
-    bulkFormatCbs.forEach(cb => cb.addEventListener('change', checkBulkReady));
+    bulkDatasetSelect.addEventListener('change',checkBulkReady);
+    bulkFormatCbs.forEach(cb=>cb.addEventListener('change',checkBulkReady));
 
-    bulkConvertBtn.addEventListener('click', async () => {
-      if (bulkConvertBtn.disabled) return;
-      const defaultDataset = DATASETS[bulkDatasetSelect.value] || bulkDatasetSelect.value;
-      const selected = Array.from(bulkFormatCbs).filter(cb => cb.checked).map(cb => cb.value);
+    bulkConvertBtn.addEventListener('click', async ()=>{
+      if(bulkConvertBtn.disabled) return;
+      bulkError.classList.add('hidden'); bulkError.textContent='';
 
-      bulkConvertBtn.textContent = 'Processing Assets...';
-      bulkConvertBtn.disabled = true;
+      const defaultDataset=DATASETS[bulkDatasetSelect.value]||bulkDatasetSelect.value;
+      const fmts=Array.from(bulkFormatCbs).filter(cb=>cb.checked).map(cb=>cb.value);
 
-      try {
-        for (const fmt of selected) {
-          const param = FORMAT_PARAM[fmt] || fmt;
+      bulkConvertBtn.textContent='Processing Assets...';
+      bulkConvertBtn.disabled=true;
 
-          const body = {
-            items: bulkItems,
-            defaultDataset,
-            format: param
-          };
-          const res = await fetch(BULK_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-          });
-          if (!res.ok) throw new Error('Bulk request failed');
+      try{
+        for(const f of fmts){
+          const format=BULK_FORMAT[f]||f;
 
-          const blob = await res.blob();
-          const fileName = getFilenameFromHeaders(res.headers) || `mapbuddy_${param}.zip`;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(url);
-          await new Promise(r => setTimeout(r, 350));
+          // two body variants: with defaultDataset, and with dataset per item
+          const bodyA={ items: bulkRows, defaultDataset, format };
+          const itemsWithDs=bulkRows.map(r=> r.dataset ? r : ({...r, dataset: defaultDataset}));
+          const bodyB={ items: itemsWithDs, format };
+
+          let downloaded=false;
+          // try each endpoint with bodyA then bodyB
+          for(const build of BULK_ENDPOINTS){
+            const url=build({format,defaultDataset});
+            // A
+            if(!downloaded) downloaded = await tryBulkPost(url, bodyA, guessFilename(format));
+            // B
+            if(!downloaded) downloaded = await tryBulkPost(url, bodyB, guessFilename(format));
+            if(downloaded) break;
+          }
+          if(!downloaded){
+            throw new Error(`Bulk ${format} failed: no endpoint accepted request.`);
+          }
+          await delay(350);
         }
-
-        bulkConvertBtn.textContent = 'Download Again';
-      } catch (e) {
-        console.error(e);
-        alert('Bulk conversion failed. Please retry.');
-        bulkConvertBtn.textContent = 'Process Bulk Conversion';
-      } finally {
-        bulkConvertBtn.disabled = false;
+        bulkConvertBtn.textContent='Download Again';
+      }catch(err){
+        bulkError.textContent = err.message;
+        bulkError.classList.remove('hidden');
+        bulkConvertBtn.textContent='Process Bulk Conversion';
+      }finally{
+        bulkConvertBtn.disabled=false;
       }
     });
 
-    function getFilenameFromHeaders(headers) {
-      const cd = headers.get('content-disposition');
-      if (!cd) return null;
-      const m = /filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(cd);
-      return decodeURIComponent(m?.[1] || m?.[2] || '');
+    async function tryBulkPost(url, body, fallbackName){
+      try{
+        const res=await fetch(url,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Accept':'application/zip,application/octet-stream,*/*'},
+          body:JSON.stringify(body)
+        });
+        if(!res.ok){
+          // read any error text to surface the backend message
+          const txt=await safeText(res);
+          // treat 404/405 as "try next"
+          if(res.status===404 || res.status===405) return false;
+          throw new Error(`${res.status} ${res.statusText}${txt?': '+txt:''}`);
+        }
+        const ctype=(res.headers.get('content-type')||'').toLowerCase();
+        if(ctype.includes('application/json')){
+          const j=await res.json();
+          if(j?.error || j?.message) throw new Error(j.error||j.message);
+          // if server returns a signed URL
+          if(j?.url){ window.location.href=j.url; return true; }
+          // unknown json -> try as text
+          throw new Error('Unexpected JSON response from bulk endpoint.');
+        }
+        const blob=await res.blob();
+        const name=getFilename(res.headers) || fallbackName;
+        downloadBlob(blob,name);
+        return true;
+      }catch(e){
+        // Only bubble up for non-404/405 thrown above; here treat network as "try next"
+        return false;
+      }
     }
+
+    /* ============== helpers ============== */
+    function guessFilename(format){
+      const ts=new Date().toISOString().slice(0,10);
+      return `mapbuddy_${format}_${ts}.zip`;
+    }
+    function getFilename(headers){
+      const cd=headers.get('content-disposition'); if(!cd) return null;
+      const m=/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(cd);
+      return decodeURIComponent(m?.[1]||m?.[2]||'');
+    }
+    function downloadBlob(blob,filename){
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+    const delay=(ms)=>new Promise(r=>setTimeout(r,ms));
+    async function safeText(res){ try{ return await res.text(); }catch{ return ''; } }
   </script>
 </body>
 </html>
