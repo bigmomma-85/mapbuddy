@@ -262,297 +262,392 @@
   </footer>
 
   <!-- ======================= APP SCRIPT ======================= -->
-  <script>
-    /* If your app is mounted at /mapbuddy set API_BASE = '/mapbuddy' */
-    const API_BASE = '';
+<script>
+  /* If your app is mounted at /mapbuddy set API_BASE = '/mapbuddy' */
+  const API_BASE = '';
 
-    /* Map UI values → backend dataset keys (edit these to match your server) */
-    const DATASET_KEY_MAP = {
-      fairfax: 'fairfax_bmps',
-      mdsha_lod: 'mdsha_managed_landscape',
-      mdsha_tmdl_scs: 'mdsha_tmdl_scs',
-      mdsha_tmdl_retrofits: 'mdsha_tmdl_retrofits',
-      mdsha_tmdl_tree: 'mdsha_tmdl_tree',
-      mdsha_tmdl_pavement: 'mdsha_tmdl_pavement',
-      mdsha_tmdl_stream: 'mdsha_tmdl_stream',
-      mdsha_tmdl_outfall: 'mdsha_tmdl_outfall'
-    };
+  /* Map UI values → backend dataset keys (edit these to match your server) */
+  const DATASET_KEY_MAP = {
+    fairfax: 'fairfax_bmps',
+    mdsha_lod: 'mdsha_managed_landscape',
+    mdsha_tmdl_scs: 'mdsha_tmdl_scs',
+    mdsha_tmdl_retrofits: 'mdsha_tmdl_retrofits',
+    mdsha_tmdl_tree: 'mdsha_tmdl_tree',
+    mdsha_tmdl_pavement: 'mdsha_tmdl_pavement',
+    mdsha_tmdl_stream: 'mdsha_tmdl_stream',
+    mdsha_tmdl_outfall: 'mdsha_tmdl_outfall'
+  };
 
-    /* Preferred + fallback endpoints */
-    const SINGLE_ENDPOINTS = [
-      `${API_BASE}/api/single`,
-      `${API_BASE}/api/download`,
-      `${API_BASE}/api/convert`,
-      `${API_BASE}/api/asset`
-    ];
-    const BULK_ENDPOINTS = [
-      `${API_BASE}/api/bulk`,
-      `${API_BASE}/api/convert/bulk`,
-      `${API_BASE}/api/download/bulk`
-    ];
-    const LINK_ENDPOINTS = [
-      `${API_BASE}/api/link`,
-      `${API_BASE}/api/maps`,
-      `${API_BASE}/api/google`
-    ];
+  /* Preferred + fallback endpoints */
+  const SINGLE_ENDPOINTS = [
+    `${API_BASE}/api/single`,
+    `${API_BASE}/api/download`,
+    `${API_BASE}/api/convert`,
+    `${API_BASE}/api/asset`
+  ];
+  const BULK_ENDPOINTS = [
+    `${API_BASE}/api/bulk`,
+    `${API_BASE}/api/convert/bulk`,
+    `${API_BASE}/api/download/bulk`
+  ];
+  const LINK_ENDPOINTS = [
+    `${API_BASE}/api/link`,
+    `${API_BASE}/api/maps`,
+    `${API_BASE}/api/google`
+  ];
 
-    /* Format ladders (fixes 404 / “no endpoint accepted request” issues) */
-    const SINGLE_FORMAT_LADDER = {
-      kml: ['kml', 'kmlzip'],
-      geojson: ['geojson', 'geojsonzip'],
-      shapefile: ['shp', 'shpzip', 'shapefilezip']
-    };
-    const BULK_FORMAT_MAP = {
-      kml: ['kmlzip', 'kml'],
-      geojson: ['geojsonzip', 'geojson'],
-      shapefile: ['shpzip', 'shapefilezip']
-    };
+  /* Format ladders (fixes 404 / “no endpoint accepted request” issues) */
+  const SINGLE_FORMAT_LADDER = {
+    kml: ['kml', 'kmlzip'],
+    geojson: ['geojson', 'geojsonzip'],
+    shapefile: ['shp', 'shpzip', 'shapefilezip']
+  };
+  const BULK_FORMAT_MAP = {
+    kml: ['kmlzip', 'kml'],
+    geojson: ['geojsonzip', 'geojson'],
+    shapefile: ['shpzip', 'shapefilezip']
+  };
 
-    /* Utilities */
-    const $ = (id) => document.getElementById(id);
-    function enable(el, on=true) { el.disabled = !on; }
-    function suggestedFilename(res, fallback) {
-      const cd = res.headers.get('content-disposition');
-      if (cd) {
-        const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i);
-        if (m) return decodeURIComponent(m[1] || m[2]);
-      }
-      return fallback;
+  /* Utilities */
+  const $ = (id) => document.getElementById(id);
+  function enable(el, on=true) { el.disabled = !on; }
+  function suggestedFilename(res, fallback) {
+    const cd = res.headers.get('content-disposition');
+    if (cd) {
+      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i);
+      if (m) return decodeURIComponent(m[1] || m[2]);
     }
-    function saveBlob(blob, name) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    }
-    async function postBinary(url, payload) {
-      const res = await fetch(url, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error(`${url} → ${res.status}`);
-      return { res, blob: await res.blob() };
-    }
-    async function getJSON(url) {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`${url} → ${res.status}`);
-      return res.json();
-    }
-
-    /* Elements */
-    const singleModeBtn = $('singleModeBtn');
-    const bulkModeBtn   = $('bulkModeBtn');
-    const singleMode    = $('singleMode');
-    const bulkMode      = $('bulkMode');
-
-    const datasetSelect = $('datasetSelect');
-    const assetNumber   = $('assetNumber');
-    const singleBtn     = $('singleConvertBtn');
-    const googleBox     = $('googleMapsSection');
-
-    const bulkDataset   = $('bulkDatasetSelect');
-    const bulkBtn       = $('bulkConvertBtn');
-    const csvArea       = $('csvUploadArea');
-    const csvFileInput  = $('csvFileInput');
-    const chooseCsvBtn  = $('chooseCsvBtn');
-    const csvMeta       = $('csvMeta');
-
-    const singleFormats = [...document.querySelectorAll('input[name="format"]')];
-    const bulkFormats   = [...document.querySelectorAll('input[name="bulkFormat"]')];
-
-    let uploadedAssets = []; // for bulk
-    let csvUploaded = false;
-    let currentGoogleLink = null;
-
-    /* Toggle */
-    singleModeBtn.addEventListener('click', () => {
-      singleModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      bulkModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      bulkModeBtn.classList.add('text-gray-600');
-      singleMode.classList.remove('hidden'); bulkMode.classList.add('hidden');
+    return fallback;
+  }
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+  async function postBinary(url, payload) {
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
     });
-    bulkModeBtn.addEventListener('click', () => {
-      bulkModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      singleModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
-      singleModeBtn.classList.add('text-gray-600');
-      bulkMode.classList.remove('hidden'); singleMode.classList.add('hidden');
+    if (!res.ok) throw new Error(`${url} → ${res.status}`);
+    return { res, blob: await res.blob() };
+  }
+  async function postForText(url, payload) {
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
     });
+    if (!res.ok) throw new Error(`${url} → ${res.status}`);
+    const ct = res.headers.get('content-type') || '';
+    const text = await res.text();
+    return { ct, text };
+  }
+  async function getJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url} → ${res.status}`);
+    return res.json();
+  }
 
-    /* Ready checks */
-    function singleReady() {
-      const hasDs = datasetSelect.value;
-      const hasId = assetNumber.value.trim();
-      const hasFmt= singleFormats.some(cb => cb.checked);
-      enable(singleBtn, hasDs && hasId && hasFmt);
+  /* Elements */
+  const singleModeBtn = $('singleModeBtn');
+  const bulkModeBtn   = $('bulkModeBtn');
+  const singleMode    = $('singleMode');
+  const bulkMode      = $('bulkMode');
+
+  const datasetSelect = $('datasetSelect');
+  const assetNumber   = $('assetNumber');
+  const singleBtn     = $('singleConvertBtn');
+  const googleBox     = $('googleMapsSection');
+
+  const bulkDataset   = $('bulkDatasetSelect');
+  const bulkBtn       = $('bulkConvertBtn');
+  const csvArea       = $('csvUploadArea');
+  const csvFileInput  = $('csvFileInput');
+  const chooseCsvBtn  = $('chooseCsvBtn');
+  const csvMeta       = $('csvMeta');
+
+  const singleFormats = [...document.querySelectorAll('input[name="format"]')];
+  const bulkFormats   = [...document.querySelectorAll('input[name="bulkFormat"]')];
+
+  let uploadedAssets = []; // for bulk
+  let csvUploaded = false;
+  let currentGoogleLink = null;
+
+  /* Toggle */
+  singleModeBtn.addEventListener('click', () => {
+    singleModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+    bulkModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+    bulkModeBtn.classList.add('text-gray-600');
+    singleMode.classList.remove('hidden'); bulkMode.classList.add('hidden');
+  });
+  bulkModeBtn.addEventListener('click', () => {
+    bulkModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+    singleModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+    singleModeBtn.classList.add('text-gray-600');
+    bulkMode.classList.remove('hidden'); singleMode.classList.add('hidden');
+  });
+
+  /* Ready checks */
+  function singleReady() {
+    const hasDs = datasetSelect.value;
+    const hasId = assetNumber.value.trim();
+    const hasFmt= singleFormats.some(cb => cb.checked);
+    enable(singleBtn, hasDs && hasId && hasFmt);
+  }
+  function bulkReady() {
+    const hasDs = bulkDataset.value;
+    const hasFmt= bulkFormats.some(cb => cb.checked);
+    enable(bulkBtn, csvUploaded && hasDs && hasFmt);
+  }
+  datasetSelect.addEventListener('change', singleReady);
+  assetNumber.addEventListener('input', singleReady);
+  singleFormats.forEach(cb => cb.addEventListener('change', singleReady));
+  bulkDataset.addEventListener('change', bulkReady);
+  bulkFormats.forEach(cb => cb.addEventListener('change', bulkReady));
+
+  /* CSV handling */
+  chooseCsvBtn.addEventListener('click', () => csvFileInput.click());
+  csvArea.addEventListener('dragover', e => { e.preventDefault(); csvArea.classList.add('bg-blue-50'); });
+  csvArea.addEventListener('dragleave', () => csvArea.classList.remove('bg-blue-50'));
+  csvArea.addEventListener('drop', e => {
+    e.preventDefault(); csvArea.classList.remove('bg-blue-50');
+    if (e.dataTransfer.files?.length) handleCsvFile(e.dataTransfer.files[0]);
+  });
+  csvArea.addEventListener('click', e => {
+    if (e.target.id === 'chooseCsvBtn' || e.target.closest('#chooseCsvBtn')) return;
+    csvFileInput.click();
+  });
+  csvFileInput.addEventListener('change', () => {
+    if (csvFileInput.files?.length) handleCsvFile(csvFileInput.files[0]);
+  });
+
+  async function handleCsvFile(file) {
+    const text = await file.text();
+    uploadedAssets = parseAssetsFromCSV(text);
+    csvUploaded = uploadedAssets.length > 0;
+    csvMeta.textContent = csvUploaded
+      ? `Loaded ${uploadedAssets.length} assets`
+      : 'No valid asset IDs found.';
+    csvMeta.classList.remove('hidden');
+    bulkReady();
+  }
+
+  function parseAssetsFromCSV(text) {
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+    const items = [];
+    for (let i=0;i<rows.length;i++) {
+      const cols = rows[i].split(',').map(c => c.trim());
+      const first = cols[0] || '';
+      if (!first) continue;
+      if (i===0 && /asset|bmp|id/i.test(first)) continue; // skip header
+      items.push({ assetId: first });
     }
-    function bulkReady() {
-      const hasDs = bulkDataset.value;
-      const hasFmt= bulkFormats.some(cb => cb.checked);
-      enable(bulkBtn, csvUploaded && hasDs && hasFmt);
-    }
-    datasetSelect.addEventListener('change', singleReady);
-    assetNumber.addEventListener('input', singleReady);
-    singleFormats.forEach(cb => cb.addEventListener('change', singleReady));
-    bulkDataset.addEventListener('change', bulkReady);
-    bulkFormats.forEach(cb => cb.addEventListener('change', bulkReady));
+    return items;
+  }
 
-    /* CSV handling */
-    chooseCsvBtn.addEventListener('click', () => csvFileInput.click());
-    csvArea.addEventListener('dragover', e => { e.preventDefault(); csvArea.classList.add('bg-blue-50'); });
-    csvArea.addEventListener('dragleave', () => csvArea.classList.remove('bg-blue-50'));
-    csvArea.addEventListener('drop', e => {
-      e.preventDefault(); csvArea.classList.remove('bg-blue-50');
-      if (e.dataTransfer.files?.length) handleCsvFile(e.dataTransfer.files[0]);
-    });
-    csvArea.addEventListener('click', e => {
-      if (e.target.id === 'chooseCsvBtn' || e.target.closest('#chooseCsvBtn')) return;
-      csvFileInput.click();
-    });
-    csvFileInput.addEventListener('change', () => {
-      if (csvFileInput.files?.length) handleCsvFile(csvFileInput.files[0]);
-    });
+  /* ---------- Single convert ---------- */
+  singleBtn.addEventListener('click', async () => {
+    if (singleBtn.disabled) return;
 
-    async function handleCsvFile(file) {
-      const text = await file.text();
-      uploadedAssets = parseAssetsFromCSV(text);
-      csvUploaded = uploadedAssets.length > 0;
-      csvMeta.textContent = csvUploaded
-        ? `Loaded ${uploadedAssets.length} assets`
-        : 'No valid asset IDs found.';
-      csvMeta.classList.remove('hidden');
-      bulkReady();
-    }
+    const dsKey = DATASET_KEY_MAP[datasetSelect.value] || datasetSelect.value;
+    const assetId = assetNumber.value.trim();
+    const formats = singleFormats.filter(cb => cb.checked).map(cb => cb.value);
 
-    function parseAssetsFromCSV(text) {
-      const rows = text.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
-      const items = [];
-      for (let i=0;i<rows.length;i++) {
-        const cols = rows[i].split(',').map(c => c.trim());
-        const first = cols[0] || '';
-        if (!first) continue;
-        // Skip header if first cell looks like header text
-        if (i===0 && /asset|bmp|id/i.test(first)) continue;
-        items.push({ assetId: first });
-      }
-      return items;
-    }
+    singleBtn.textContent = 'Generating Files...';
+    enable(singleBtn, false);
 
-    /* Single convert */
-    singleBtn.addEventListener('click', async () => {
-      if (singleBtn.disabled) return;
-
-      const dsKey = DATASET_KEY_MAP[datasetSelect.value] || datasetSelect.value;
-      const assetId = assetNumber.value.trim();
-      const formats = singleFormats.filter(cb => cb.checked).map(cb => cb.value);
-
-      singleBtn.textContent = 'Generating Files...';
-      enable(singleBtn, false);
-
-      try {
-        for (const uiFmt of formats) {
-          const ladder = SINGLE_FORMAT_LADDER[uiFmt] || [uiFmt];
-          let success = false, lastErr;
-          for (const fmt of ladder) {
-            for (const ep of SINGLE_ENDPOINTS) {
-              try {
-                const payload = { assetId, dataset: dsKey, format: fmt };
-                const { res, blob } = await postBinary(ep, payload);
-                const name = suggestedFilename(res, `${assetId}_${fmt}.bin`);
-                saveBlob(blob, name);
-                success = true; break;
-              } catch(e) { lastErr = e; continue; }
-            }
-            if (success) break;
+    try {
+      for (const uiFmt of formats) {
+        const ladder = SINGLE_FORMAT_LADDER[uiFmt] || [uiFmt];
+        let success = false, lastErr;
+        for (const fmt of ladder) {
+          for (const ep of SINGLE_ENDPOINTS) {
+            try {
+              const payload = { assetId, dataset: dsKey, format: fmt };
+              const { res, blob } = await postBinary(ep, payload);
+              const name = suggestedFilename(res, `${assetId}_${fmt}.bin`);
+              saveBlob(blob, name);
+              success = true; break;
+            } catch(e) { lastErr = e; continue; }
           }
-          if (!success && lastErr) throw lastErr;
+          if (success) break;
         }
-
-        // Google Maps link
-        currentGoogleLink = await getGoogleLink(assetId, dsKey);
-        if (currentGoogleLink) googleBox.classList.remove('hidden');
-
-        singleBtn.textContent = 'Download Files';
-        singleBtn.classList.remove('from-map-blue','to-map-green');
-        singleBtn.classList.add('from-green-500','to-green-600');
-        enable(singleBtn, true);
-      } catch (err) {
-        console.error(err);
-        alert('Single conversion failed. Please retry.');
-        singleBtn.textContent = 'Generate Map Files';
-        singleBtn.classList.remove('from-green-500','to-green-600');
-        singleBtn.classList.add('from-map-blue','to-map-green');
-        enable(singleBtn, true);
+        if (!success && lastErr) throw lastErr;
       }
-    });
 
-    /* Bulk convert */
-    bulkBtn.addEventListener('click', async () => {
-      if (bulkBtn.disabled) return;
+      // Google Maps link (robust)
+      currentGoogleLink = await getGoogleLink(assetId, dsKey);
+      if (currentGoogleLink) googleBox.classList.remove('hidden');
 
-      const dsKey = DATASET_KEY_MAP[bulkDataset.value] || bulkDataset.value;
-      const selected = bulkFormats.filter(cb => cb.checked).map(cb => cb.value);
-
-      bulkBtn.textContent = 'Processing Assets...';
-      enable(bulkBtn, false);
-
-      try {
-        for (const uiFmt of selected) {
-          const candidates = BULK_FORMAT_MAP[uiFmt] || [uiFmt];
-          let success = false, lastErr;
-          for (const fmt of candidates) {
-            for (const ep of BULK_ENDPOINTS) {
-              try {
-                const payload = {
-                  items: uploadedAssets,          // [{assetId}]
-                  defaultDataset: dsKey,
-                  format: fmt                     // kmlzip | geojsonzip | shpzip
-                };
-                const { res, blob } = await postBinary(ep, payload);
-                const name = suggestedFilename(res, `mapbuddy_${fmt}.zip`);
-                saveBlob(blob, name);
-                success = true; break;
-              } catch(e) { lastErr = e; continue; }
-            }
-            if (success) break;
-          }
-          if (!success && lastErr) throw lastErr;
-        }
-
-        bulkBtn.textContent = 'Download Bulk Files';
-        bulkBtn.classList.remove('from-map-blue','to-map-green');
-        bulkBtn.classList.add('from-green-500','to-green-600');
-        enable(bulkBtn, true);
-      } catch (err) {
-        console.error(err);
-        alert('Bulk conversion failed. Please retry.');
-        bulkBtn.textContent = 'Process Bulk Conversion';
-        bulkBtn.classList.remove('from-green-500','to-green-600');
-        bulkBtn.classList.add('from-map-blue','to-map-green');
-        enable(bulkBtn, true);
-      }
-    });
-
-    /* Google Maps helpers */
-    async function getGoogleLink(assetId, datasetKey) {
-      for (const ep of LINK_ENDPOINTS) {
-        try {
-          const url = `${ep}?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`;
-          const json = await getJSON(url);
-          if (json && json.url) return json.url;
-        } catch(e) { /* try next */ }
-      }
-      // Fallback: a best-effort search URL
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + ' ' + datasetKey)}`;
+      singleBtn.textContent = 'Download Files';
+      singleBtn.classList.remove('from-map-blue','to-map-green');
+      singleBtn.classList.add('from-green-500','to-green-600');
+      enable(singleBtn, true);
+    } catch (err) {
+      console.error(err);
+      alert('Single conversion failed. Please retry.');
+      singleBtn.textContent = 'Generate Map Files';
+      singleBtn.classList.remove('from-green-500','to-green-600');
+      singleBtn.classList.add('from-map-blue','to-map-green');
+      enable(singleBtn, true);
     }
-    window.copyGoogleMapsLink = function() {
-      if (!currentGoogleLink) return;
-      navigator.clipboard.writeText(currentGoogleLink).then(() => alert('Google Maps link copied!'));
-    };
-    window.openGoogleMaps = function() {
-      if (!currentGoogleLink) return;
-      window.open(currentGoogleLink, '_blank','noopener,noreferrer');
-    };
-  </script>
+  });
+
+  /* ---------- Bulk convert ---------- */
+  bulkBtn.addEventListener('click', async () => {
+    if (bulkBtn.disabled) return;
+
+    const dsKey = DATASET_KEY_MAP[bulkDataset.value] || bulkDataset.value;
+    const selected = bulkFormats.filter(cb => cb.checked).map(cb => cb.value);
+
+    bulkBtn.textContent = 'Processing Assets...';
+    enable(bulkBtn, false);
+
+    try {
+      for (const uiFmt of selected) {
+        const candidates = BULK_FORMAT_MAP[uiFmt] || [uiFmt];
+        let success = false, lastErr;
+        for (const fmt of candidates) {
+          for (const ep of BULK_ENDPOINTS) {
+            try {
+              const payload = {
+                items: uploadedAssets,          // [{assetId}]
+                defaultDataset: dsKey,
+                format: fmt                     // kmlzip | geojsonzip | shpzip
+              };
+              const { res, blob } = await postBinary(ep, payload);
+              const name = suggestedFilename(res, `mapbuddy_${fmt}.zip`);
+              saveBlob(blob, name);
+              success = true; break;
+            } catch(e) { lastErr = e; continue; }
+          }
+          if (success) break;
+        }
+        if (!success && lastErr) throw lastErr;
+      }
+
+      bulkBtn.textContent = 'Download Bulk Files';
+      bulkBtn.classList.remove('from-map-blue','to-map-green');
+      bulkBtn.classList.add('from-green-500','to-green-600');
+      enable(bulkBtn, true);
+    } catch (err) {
+      console.error(err);
+      alert('Bulk conversion failed. Please retry.');
+      bulkBtn.textContent = 'Process Bulk Conversion';
+      bulkBtn.classList.remove('from-green-500','to-green-600');
+      bulkBtn.classList.add('from-map-blue','to-map-green');
+      enable(bulkBtn, true);
+    }
+  });
+
+  /* ---------- Google Maps helpers ---------- */
+
+  // 1) Try your link endpoints
+  async function getGoogleLink(assetId, datasetKey) {
+    for (const ep of LINK_ENDPOINTS) {
+      try {
+        const url = `${ep}?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`;
+        const json = await getJSON(url);
+        if (json && json.url) return json.url;
+      } catch(e) { /* try next */ }
+    }
+    // 2) Fallback: resolve via GeoJSON centroid (silent)
+    const viaGeo = await resolveViaGeoJSON(assetId, datasetKey);
+    if (viaGeo) return viaGeo;
+    // 3) Last resort: search URL
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + ' ' + datasetKey)}`;
+  }
+
+  // Quietly request GeoJSON for the asset, compute centroid, return q=lat,lng URL
+  async function resolveViaGeoJSON(assetId, datasetKey) {
+    for (const ep of SINGLE_ENDPOINTS) {
+      try {
+        const payload = { assetId, dataset: datasetKey, format: 'geojson', silent: true };
+        const { ct, text } = await postForText(ep, payload);
+        // Must be JSON to proceed
+        if (!/application\/json|geo\+json|json/i.test(ct)) {
+          // Some servers may set octet-stream; try to parse anyway
+          try {
+            JSON.parse(text);
+          } catch { continue; }
+        }
+        let gj;
+        try { gj = JSON.parse(text); } catch { continue; }
+        const ll = centroidFromGeoJSON(gj);
+        if (ll) {
+          const [lat,lng] = ll;
+          return `https://www.google.com/maps?q=${lat},${lng}`;
+        }
+      } catch(e) { /* try next */ }
+    }
+    return null;
+  }
+
+  // Return [lat,lng] from GeoJSON (handles Point / LineString / Polygon / Multi*)
+  function centroidFromGeoJSON(gj) {
+    let g = gj;
+    if (g.type === 'Feature') g = g.geometry;
+    if (g.type === 'FeatureCollection') {
+      if (!g.features?.length) return null;
+      g = g.features[0].geometry;
+    }
+    if (!g || !g.type) return null;
+
+    const toLatLng = (coord) => [coord[1], coord[0]]; // [lng,lat] -> [lat,lng]
+
+    if (g.type === 'Point') return toLatLng(g.coordinates);
+    if (g.type === 'MultiPoint') {
+      const avg = averageXY(g.coordinates);
+      return toLatLng(avg);
+    }
+    if (g.type === 'LineString') {
+      const mid = g.coordinates[Math.floor(g.coordinates.length/2)];
+      return toLatLng(mid);
+    }
+    if (g.type === 'MultiLineString') {
+      const first = g.coordinates?.[0];
+      if (!first?.length) return null;
+      const mid = first[Math.floor(first.length/2)];
+      return toLatLng(mid);
+    }
+    if (g.type === 'Polygon') {
+      const ring = g.coordinates?.[0];
+      if (!ring?.length) return null;
+      const c = bboxCenter(ring);
+      return toLatLng(c);
+    }
+    if (g.type === 'MultiPolygon') {
+      const poly = g.coordinates?.[0]?.[0];
+      if (!poly?.length) return null;
+      const c = bboxCenter(poly);
+      return toLatLng(c);
+    }
+    return null;
+  }
+
+  function averageXY(coords) {
+    let sx=0, sy=0, n=0;
+    coords.forEach(c => { sx+=c[0]; sy+=c[1]; n++; });
+    return n ? [sx/n, sy/n] : null;
+  }
+  function bboxCenter(ring) {
+    let minx=Infinity, miny=Infinity, maxx=-Infinity, maxy=-Infinity;
+    ring.forEach(c => { minx=Math.min(minx,c[0]); miny=Math.min(miny,c[1]); maxx=Math.max(maxx,c[0]); maxy=Math.max(maxy,c[1]); });
+    return [(minx+maxx)/2, (miny+maxy)/2];
+  }
+
+  // UI hooks for the buttons
+  window.copyGoogleMapsLink = function() {
+    if (!currentGoogleLink) return;
+    navigator.clipboard.writeText(currentGoogleLink).then(() => alert('Google Maps link copied!'));
+  };
+  window.openGoogleMaps = function() {
+    if (!currentGoogleLink) return;
+    window.open(currentGoogleLink, '_blank','noopener,noreferrer');
+  };
+</script>
 </body>
 </html>
