@@ -9,224 +9,297 @@
     tailwind.config = {
       theme: { extend: { colors: { 'map-blue':'#2563eb','map-green':'#059669','map-orange':'#ea580c' } } }
     }
-  </script>
-  <style>.ring-focus:focus{outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.2)}</style>
-</head>
-<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
-  <!-- Header -->
-  <header class="bg-white shadow-sm border-b border-gray-100">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between items-center py-6">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 bg-gradient-to-r from-map-blue to-map-green rounded-lg flex items-center justify-center">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
-          </div>
-          <h1 class="text-2xl font-bold text-gray-900">MapBuddy</h1>
-        </div>
-        <div class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Internal Use Only</div>
-      </div>
-    </div>
-  </header>
+ <script>
+/* ========= Deploy tweak =========
+   If your app is hosted under a sub-path (e.g., /mapbuddy), set API_BASE = '/mapbuddy'.
+   Otherwise leave it as ''.
+*/
+const API_BASE = '';
 
-  <!-- Hero -->
-  <section class="py-12 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-4xl mx-auto text-center">
-      <h2 class="text-5xl font-bold text-gray-900 mb-6">
-        Convert Assets to
-        <span class="text-transparent bg-clip-text bg-gradient-to-r from-map-blue to-map-green">Map Files</span>
-      </h2>
-      <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-        Transform asset numbers into KML, GeoJSON, and Shapefile formats. Single asset or bulk processing available.
-      </p>
-    </div>
-  </section>
+/* ========= Endpoints to try (in order) ========= */
+const SINGLE_ENDPOINTS = [
+  `${API_BASE}/api/single`,          // preferred
+  `${API_BASE}/api/download`,        // fallback some older builds
+  `${API_BASE}/api/convert`,         // generic fallback
+  `${API_BASE}/api/asset`            // last-resort
+];
 
-  <!-- Main -->
-  <section class="py-8 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-6xl mx-auto">
-      <!-- Mode toggle -->
-      <div class="flex justify-center mb-8">
-        <div class="bg-white rounded-xl p-2 shadow-lg">
-          <button id="singleModeBtn" class="px-6 py-3 rounded-lg font-medium transition-all bg-gradient-to-r from-map-blue to-map-green text-white">
-            Single Convert
-          </button>
-          <button id="bulkModeBtn" class="px-6 py-3 rounded-lg font-medium transition-all text-gray-600 hover:text-gray-900">
-            Bulk Convert
-          </button>
-        </div>
-      </div>
+const BULK_ENDPOINTS = [
+  `${API_BASE}/api/bulk`,            // preferred
+  `${API_BASE}/api/convert/bulk`,    // fallback
+  `${API_BASE}/api/download/bulk`    // last-resort
+];
 
-      <!-- Single -->
-      <div id="singleMode" class="bg-white rounded-2xl shadow-xl p-8 mb-8">
-        <h3 class="text-2xl font-bold text-gray-900 mb-6 text-center">Single Asset Conversion</h3>
+const LINK_ENDPOINTS = [
+  `${API_BASE}/api/link`,
+  `${API_BASE}/api/maps`,
+  `${API_BASE}/api/google`
+];
 
-        <div id="singleError" class="hidden mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm"></div>
+/* ========= Format mappings =========
+   Single tries a small ladder per format.
+   Bulk must be zipped: kmlzip / geojsonzip / shpzip.
+*/
+const SINGLE_FORMAT_LADDER = {
+  kml:      ['kml', 'kmlzip'],
+  geojson:  ['geojson', 'geojsonzip'],
+  shapefile:['shp', 'shpzip', 'shapefilezip']
+};
 
-        <div class="max-w-2xl mx-auto space-y-6">
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-2">Dataset</label>
-            <select id="datasetSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg ring-focus focus:ring-2 focus:ring-map-blue focus:border-transparent">
-              <option value="">Select Dataset</option>
-              <optgroup label="Fairfax">
-                <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-              </optgroup>
-              <optgroup label="MD SHA">
-                <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
-              </optgroup>
-              <optgroup label="TMDL (MD SHA)">
-                <option value="tmdl_scs">TMDL — Stormwater Control Structures</option>
-                <option value="tmdl_retrofits">TMDL — Retrofits</option>
-                <option value="tmdl_tree_plantings">TMDL — Tree Plantings</option>
-                <option value="tmdl_pavement_removals">TMDL — Pavement Removals</option>
-                <option value="tmdl_stream_restorations">TMDL — Stream Restorations</option>
-                <option value="tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
-              </optgroup>
-            </select>
-          </div>
+const BULK_FORMAT_MAP = {
+  kml:      ['kmlzip', 'kml'],        // will try zipped first
+  geojson:  ['geojsonzip', 'geojson'],
+  shapefile:['shpzip', 'shapefilezip']
+};
 
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-2">Asset Number</label>
-            <input id="assetNumber" type="text" placeholder="Enter asset number (e.g., WP0399)" class="w-full px-4 py-3 border border-gray-300 rounded-lg ring-focus focus:ring-2 focus:ring-map-blue focus:border-transparent">
-          </div>
+/* ========= Small helpers ========= */
+function suggestedFilenameFromResponse(res, fallback) {
+  const cd = res.headers.get('content-disposition');
+  if (cd) {
+    const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i);
+    if (m) return decodeURIComponent(m[1] || m[2]);
+  }
+  return fallback;
+}
 
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-2">Output Format</label>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-blue transition-colors">
-                <input type="checkbox" name="format" value="kml" class="mr-3 text-map-blue">
-                <span class="text-sm font-medium">🗺️ KML</span>
-              </label>
-              <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-green transition-colors">
-                <input type="checkbox" name="format" value="geojson" class="mr-3 text-map-green">
-                <span class="text-sm font-medium">📊 GeoJSON</span>
-              </label>
-              <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-orange transition-colors">
-                <input type="checkbox" name="format" value="shapefile" class="mr-3 text-map-orange">
-                <span class="text-sm font-medium">🗃️ Shapefile</span>
-              </label>
-            </div>
-          </div>
-        </div>
+function saveBlob(blob, name = 'download.bin') {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
-        <div class="text-center mt-8">
-          <button id="singleConvertBtn" class="bg-gradient-to-r from-map-blue to-map-green text-white px-8 py-4 rounded-xl font-semibold text-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50" disabled>
-            Generate Map Files
-          </button>
-        </div>
+async function tryPOSTBinary(url, payload) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(`POST ${url} → ${res.status}`);
+  const blob = await res.blob();
+  return { res, blob };
+}
 
-        <!-- Google Maps Link (hidden until ready) -->
-        <div id="googleMapsSection" class="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-xl hidden">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center"><span class="text-xl">🌍</span></div>
-              <div>
-                <h4 class="font-semibold text-gray-900">Google Maps Link</h4>
-                <p class="text-sm text-gray-600">View asset location on Google Maps</p>
-              </div>
-            </div>
-            <div class="flex space-x-3">
-              <button id="copyGmapsBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                Copy Link
-              </button>
-              <a id="openGmapsBtn" target="_blank" rel="noopener" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                Open Maps
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
+async function tryGETJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
+  return res.json();
+}
 
-      <!-- Bulk -->
-      <div id="bulkMode" class="bg-white rounded-2xl shadow-xl p-8 mb-8 hidden">
-        <h3 class="text-2xl font-bold text-gray-900 mb-6 text-center">Bulk Asset Conversion</h3>
+/* ========= UI elements ========= */
+const singleModeBtn = document.getElementById('singleModeBtn');
+const bulkModeBtn   = document.getElementById('bulkModeBtn');
+const singleMode    = document.getElementById('singleMode');
+const bulkMode      = document.getElementById('bulkMode');
 
-        <div class="grid md:grid-cols-2 gap-8">
-          <!-- Upload -->
-          <div class="space-y-6">
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-2">Dataset</label>
-              <select id="bulkDatasetSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg ring-focus focus:ring-2 focus:ring-map-blue focus:border-transparent">
-                <option value="">Select Dataset</option>
-                <optgroup label="Fairfax">
-                  <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-                </optgroup>
-                <optgroup label="MD SHA">
-                  <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
-                </optgroup>
-                <optgroup label="TMDL (MD SHA)">
-                  <option value="tmdl_scs">TMDL — Stormwater Control Structures</option>
-                  <option value="tmdl_retrofits">TMDL — Retrofits</option>
-                  <option value="tmdl_tree_plantings">TMDL — Tree Plantings</option>
-                  <option value="tmdl_pavement_removals">TMDL — Pavement Removals</option>
-                  <option value="tmdl_stream_restorations">TMDL — Stream Restorations</option>
-                  <option value="tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations</option>
-                </optgroup>
-              </select>
-            </div>
+const datasetSelect     = document.getElementById('datasetSelect');
+const assetNumber       = document.getElementById('assetNumber');
+const singleConvertBtn  = document.getElementById('singleConvertBtn');
+const formatCheckboxes  = document.querySelectorAll('input[name="format"]');
 
-            <!-- CSV upload -->
-            <div id="csvUploadArea" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-map-blue transition-colors cursor-pointer">
-              <input id="csvFileInput" type="file" accept=".csv" class="hidden"/>
-              <div class="flex flex-col items-center">
-                <div class="w-12 h-12 bg-gradient-to-r from-map-blue to-map-green rounded-full flex items-center justify-center mb-4">
-                  <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                </div>
-                <h4 class="text-lg font-semibold text-gray-900 mb-2">Drop your CSV file here</h4>
-                <p class="text-gray-500 mb-4">or click to browse</p>
-                <button id="chooseCsvBtn" type="button" class="bg-gradient-to-r from-map-blue to-map-green text-white px-4 py-2 rounded-lg font-medium hover:shadow-lg transition-all">
-                  Choose CSV File
-                </button>
-                <p id="csvStatus" class="mt-3 text-sm text-gray-600"></p>
-              </div>
-            </div>
+const bulkDatasetSelect   = document.getElementById('bulkDatasetSelect');
+const csvUploadArea       = document.getElementById('csvUploadArea');
+const bulkConvertBtn      = document.getElementById('bulkConvertBtn');
+const bulkFormatCheckboxes= document.querySelectorAll('input[name="bulkFormat"]');
 
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h5 class="font-semibold text-blue-900 mb-2">CSV Format Requirements:</h5>
-              <ul class="text-sm text-blue-800 space-y-1">
-                <li>• First column: Asset numbers</li>
-                <li>• Header row optional</li>
-                <li>• Up to 1000 assets per file</li>
-                <li>• Optional second column: dataset key or label</li>
-              </ul>
-            </div>
-          </div>
+const googleMapsSection = document.getElementById('googleMapsSection');
 
-          <!-- Format -->
-          <div class="space-y-6">
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-4">Output Formats</label>
-              <div class="space-y-3">
-                <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-blue transition-colors">
-                  <input type="checkbox" name="bulkFormat" value="kml" class="mr-4 text-map-blue">
-                  <div class="flex items-center"><span class="text-2xl mr-3">🗺️</span><div><div class="font-medium">KML Files</div><div class="text-sm text-gray-500">Google Earth format</div></div></div>
-                </label>
-                <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-green transition-colors">
-                  <input type="checkbox" name="bulkFormat" value="geojson" class="mr-4 text-map-green">
-                  <div class="flex items-center"><span class="text-2xl mr-3">📊</span><div><div class="font-medium">GeoJSON Files</div><div class="text-sm text-gray-500">Web mapping format</div></div></div>
-                </label>
-                <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-orange transition-colors">
-                  <input type="checkbox" name="bulkFormat" value="shapefile" class="mr-4 text-map-orange">
-                    <div class="flex items-center"><span class="text-2xl mr-3">🗃️</span><div><div class="font-medium">Shapefile</div><div class="text-sm text-gray-500">GIS standard format</div></div></div>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
+let csvUploaded = false;
+let currentGoogleLink = null;
 
-        <div class="text-center mt-8">
-          <button id="bulkConvertBtn" class="bg-gradient-to-r from-map-blue to-map-green text-white px-8 py-4 rounded-xl font-semibold text-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50" disabled>
-            Process Bulk Conversion
-          </button>
-        </div>
+/* ========= Mode switching ========= */
+singleModeBtn.addEventListener('click', () => {
+  singleModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+  bulkModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+  bulkModeBtn.classList.add('text-gray-600');
+  singleMode.classList.remove('hidden');
+  bulkMode.classList.add('hidden');
+});
 
-        <div id="bulkError" class="hidden mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm"></div>
-      </div>
-    </div>
-  </section>
+bulkModeBtn.addEventListener('click', () => {
+  bulkModeBtn.classList.add('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+  singleModeBtn.classList.remove('bg-gradient-to-r','from-map-blue','to-map-green','text-white');
+  singleModeBtn.classList.add('text-gray-600');
+  bulkMode.classList.remove('hidden');
+  singleMode.classList.add('hidden');
+});
 
-  <script>
+/* ========= Enable / Disable Single button ========= */
+function checkSingleConvertReady() {
+  const hasDataset = datasetSelect && datasetSelect.value;
+  const hasAsset   = assetNumber && assetNumber.value.trim();
+  const hasFormat  = Array.from(formatCheckboxes).some(cb => cb.checked);
+  singleConvertBtn.disabled = !(hasDataset && hasAsset && hasFormat);
+}
+
+datasetSelect?.addEventListener('change', checkSingleConvertReady);
+assetNumber?.addEventListener('input', checkSingleConvertReady);
+formatCheckboxes.forEach(cb => cb.addEventListener('change', checkSingleConvertReady));
+
+/* ========= Enable / Disable Bulk button ========= */
+function checkBulkConvertReady() {
+  const hasDataset = bulkDatasetSelect && bulkDatasetSelect.value;
+  const hasFormat  = Array.from(bulkFormatCheckboxes).some(cb => cb.checked);
+  bulkConvertBtn.disabled = !(csvUploaded && hasDataset && hasFormat);
+}
+
+bulkDatasetSelect?.addEventListener('change', checkBulkConvertReady);
+bulkFormatCheckboxes.forEach(cb => cb.addEventListener('change', checkBulkConvertReady));
+
+/* ========= CSV Upload (mock click to “load”) ========= */
+csvUploadArea?.addEventListener('click', () => {
+  csvUploadArea.classList.add('border-map-blue','bg-blue-50');
+  setTimeout(() => {
+    csvUploaded = true; // mark as uploaded
+    checkBulkConvertReady();
+  }, 300);
+});
+
+/* ========= SINGLE: download & link ========= */
+singleConvertBtn?.addEventListener('click', async () => {
+  if (singleConvertBtn.disabled) return;
+
+  const datasetKey = datasetSelect.value;            // your page already uses actual API keys here
+  const assetId    = assetNumber.value.trim();
+  const formats    = Array.from(formatCheckboxes).filter(cb => cb.checked).map(cb => cb.value); // kml, geojson, shapefile
+
+  singleConvertBtn.innerHTML = 'Generating Files...';
+  singleConvertBtn.disabled = true;
+
+  try {
+    // For each selected format, try its ladder until one works
+    for (const uiFmt of formats) {
+      const ladder = SINGLE_FORMAT_LADDER[uiFmt] || [uiFmt];
+      let success = false, lastErr;
+
+      for (const fmt of ladder) {
+        for (const ep of SINGLE_ENDPOINTS) {
+          try {
+            const payload = { assetId, dataset: datasetKey, format: fmt };
+            const { res, blob } = await tryPOSTBinary(ep, payload);
+            const fallbackName = `${assetId}_${fmt}.bin`;
+            const fname = suggestedFilenameFromResponse(res, fallbackName);
+            saveBlob(blob, fname);
+            success = true;
+            break; // endpoint ok
+          } catch (e) {
+            lastErr = e;
+            continue; // try next endpoint
+          }
+        }
+        if (success) break; // format ok
+      }
+
+      if (!success && lastErr) throw lastErr;
+    }
+
+    // After success, fetch Google Maps link
+    currentGoogleLink = await getGoogleLink(assetId, datasetKey);
+    if (currentGoogleLink) {
+      googleMapsSection.classList.remove('hidden');
+    }
+    singleConvertBtn.innerHTML = 'Download Files';
+    singleConvertBtn.disabled = false;
+    singleConvertBtn.classList.remove('from-map-blue','to-map-green');
+    singleConvertBtn.classList.add('from-green-500','to-green-600');
+  } catch (err) {
+    console.error(err);
+    alert('Single conversion failed. Please retry.');
+    singleConvertBtn.innerHTML = 'Generate Map Files';
+    singleConvertBtn.disabled = false;
+    singleConvertBtn.classList.remove('from-green-500','to-green-600');
+    singleConvertBtn.classList.add('from-map-blue','to-map-green');
+  }
+});
+
+/* ========= BULK: download zip(s) ========= */
+bulkConvertBtn?.addEventListener('click', async () => {
+  if (bulkConvertBtn.disabled) return;
+
+  const datasetKey = bulkDatasetSelect.value;
+  const selected   = Array.from(bulkFormatCheckboxes).filter(cb => cb.checked).map(cb => cb.value); // kml, geojson, shapefile
+
+  bulkConvertBtn.innerHTML = 'Processing Assets...';
+  bulkConvertBtn.disabled  = true;
+
+  try {
+    for (const uiFmt of selected) {
+      const candidates = BULK_FORMAT_MAP[uiFmt] || [uiFmt];
+      let success = false, lastErr;
+
+      for (const fmt of candidates) {
+        for (const ep of BULK_ENDPOINTS) {
+          try {
+            /* Expecting your API body like:
+               { items:[{assetId:"..."}, ...], defaultDataset:"...", format:"kmlzip|geojsonzip|shpzip" }
+               Here we send only the format/dataset because your API builds items from the uploaded CSV server-side.
+               If your API *requires* items here, wire your parsed rows and send them in `items`.
+            */
+            const payload = { defaultDataset: datasetKey, format: fmt };
+            const { res, blob } = await tryPOSTBinary(ep, payload);
+            const fallbackName = `mapbuddy_${fmt}.zip`;
+            const fname = suggestedFilenameFromResponse(res, fallbackName);
+            saveBlob(blob, fname);
+            success = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+            continue;
+          }
+        }
+        if (success) break;
+      }
+
+      if (!success && lastErr) throw lastErr;
+    }
+
+    bulkConvertBtn.innerHTML = 'Download Bulk Files';
+    bulkConvertBtn.disabled  = false;
+    bulkConvertBtn.classList.remove('from-map-blue','to-map-green');
+    bulkConvertBtn.classList.add('from-green-500','to-green-600');
+  } catch (err) {
+    console.error(err);
+    alert('Bulk conversion failed. Please retry.');
+    bulkConvertBtn.innerHTML = 'Process Bulk Conversion';
+    bulkConvertBtn.disabled  = false;
+    bulkConvertBtn.classList.remove('from-green-500','to-green-600');
+    bulkConvertBtn.classList.add('from-map-blue','to-map-green');
+  }
+});
+
+/* ========= Google Maps helpers ========= */
+async function getGoogleLink(assetId, datasetKey) {
+  // Try an API link builder first
+  for (const ep of LINK_ENDPOINTS) {
+    try {
+      const url = `${ep}?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`;
+      const json = await tryGETJSON(url);
+      if (json && json.url) return json.url;
+    } catch (e) {
+      continue;
+    }
+  }
+  // Fallback: very simple Maps query (not feature-precise, but better than nothing)
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId + ' ' + datasetKey)}`;
+}
+
+window.copyGoogleMapsLink = function() {
+  if (!currentGoogleLink) return;
+  navigator.clipboard.writeText(currentGoogleLink).then(() => {
+    alert('Google Maps link copied!');
+  });
+};
+
+window.openGoogleMaps = function() {
+  if (!currentGoogleLink) return;
+  window.open(currentGoogleLink, '_blank', 'noopener,noreferrer');
+};
+</script>
+
     /* ================= CONFIG ================= */
     const API_BASE = ''; // e.g. '' or '/mapbuddy'
 
