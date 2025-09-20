@@ -14,7 +14,9 @@
       }
     }
   </script>
-  <style>button[disabled]{opacity:.55;cursor:not-allowed}</style>
+  <style>
+    button[disabled]{opacity:.55;cursor:not-allowed}
+  </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
   <!-- Header -->
@@ -229,9 +231,15 @@
   </section>
 
   <script>
+    // ---- Config / constants ---------------------------------------------------
     const API_BASE = (window.__MAPBUDDY_API_BASE !== undefined)
       ? window.__MAPBUDDY_API_BASE
       : (location.pathname.includes('/mapbuddy') ? '/mapbuddy' : '');
+
+    // Only real, deployed routes
+    const SINGLE_ENDPOINTS = [`${API_BASE}/api/single`, `${API_BASE}/api/download`];
+    const BULK_ENDPOINTS   = [`${API_BASE}/api/bulk`];
+    const LINK_ENDPOINTS   = [`${API_BASE}/api/link`];
 
     const DATASET_KEY_MAP = {
       fairfax: 'fairfax_bmps',
@@ -253,11 +261,6 @@
       'TMDL — Outfall Stabilizations': 'mdsha_tmdl_outfall',
       'MDOT SHA — Managed Landscape (LOD_ID)': 'mdsha_managed_landscape'
     };
-
-    // Only the real routes
-    const SINGLE_ENDPOINTS = [`${API_BASE}/api/single`, `${API_BASE}/api/download`];
-    const BULK_ENDPOINTS   = [`${API_BASE}/api/bulk`];
-    const LINK_ENDPOINTS   = [`${API_BASE}/api/link`];
 
     const $=id=>document.getElementById(id);
     const singleModeBtn=$('singleModeBtn'), bulkModeBtn=$('bulkModeBtn');
@@ -286,18 +289,11 @@
       return val||txt;
     }
 
-    // ✅ MD SHA: zipped formats ONLY
-    function mdshaZipFmt(uiFmt){
-      if (uiFmt==='kml') return 'kmlzip';
-      if (uiFmt==='geojson') return 'geojsonzip';
-      if (uiFmt==='shapefile') return 'shpzip';
-      return uiFmt;
-    }
-    function nonMdshaFmt(uiFmt){
-      if (uiFmt==='shapefile') return 'shpzip';
-      return uiFmt; // kml, geojson
-    }
+    // Format mapping
+    const toMdshaZip = f => (f==='kml'?'kmlzip':f==='geojson'?'geojsonzip':'shpzip');
+    const toFxFmt    = f => (f==='shapefile'?'shpzip':f); // Fairfax: kml/geojson/shpzip
 
+    // Helpers
     function suggestedFilename(res,fallback){
       const cd=res.headers.get('content-disposition');
       if (cd){
@@ -313,17 +309,18 @@
     }
     async function postBinary(url,payload){
       const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Accept':'*/*'},body:JSON.stringify(payload)});
-      if(!res.ok){const txt=await res.text().catch(()=> ''); const e=new Error(`${url.replace(location.origin,'')} → ${res.status} ${res.statusText}${txt?'  '+txt:''}`); e.status=res.status; throw e;}
+      const text = await (async()=>{ try{return await res.clone().text();}catch{ return '' }})();
+      if(!res.ok){ const e=new Error(`${url.replace(location.origin,'')} → ${res.status}   ${text || res.statusText}`); e.status=res.status; e.body=text; throw e; }
       return {res, blob: await res.blob()};
     }
-    async function postForText(url,payload){
-      const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json,text/plain,*/*'},body:JSON.stringify(payload)});
-      if(!res.ok){const e=new Error(`${url.replace(location.origin,'')} → ${res.status}`); e.status=res.status; throw e;}
-      return res.text();
+    async function postJSON(url,payload){
+      const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
+      if(!res.ok){ const t=await res.text().catch(()=> ''); const e=new Error(`${url.replace(location.origin,'')} → ${res.status}   ${t}`); e.status=res.status; e.body=t; throw e; }
+      return res.json();
     }
     async function getJSON(url){
       const res=await fetch(url);
-      if(!res.ok){const e=new Error(`${url.replace(location.origin,'')} → ${res.status}`); e.status=res.status; throw e;}
+      if(!res.ok){ const t=await res.text().catch(()=> ''); const e=new Error(`${url.replace(location.origin,'')} → ${res.status}   ${t}`); e.status=res.status; e.body=t; throw e; }
       return res.json();
     }
 
@@ -337,7 +334,7 @@
     datasetSelect.addEventListener('change',singleReady); assetNumber.addEventListener('input',singleReady); singleFormats.forEach(cb=>cb.addEventListener('change',singleReady));
     bulkDataset.addEventListener('change',bulkReady); bulkFormats.forEach(cb=>cb.addEventListener('change',bulkReady));
 
-    // CSV handling
+    // CSV handling (unchanged)
     chooseCsvBtn.addEventListener('click',()=>csvFileInput.click());
     csvArea.addEventListener('dragover',e=>{e.preventDefault();csvArea.classList.add('bg-blue-50');});
     csvArea.addEventListener('dragleave',()=>csvArea.classList.remove('bg-blue-50'));
@@ -345,55 +342,85 @@
     csvArea.addEventListener('click',e=>{ if(e.target.id==='chooseCsvBtn'||e.target.closest('#chooseCsvBtn')) return; csvFileInput.click();});
     csvFileInput.addEventListener('change',()=>{ if(csvFileInput.files?.length) handleCsvFile(csvFileInput.files[0]);});
     async function handleCsvFile(file){ const text=await file.text(); uploadedAssets=parseAssetsFromCSV(text); csvUploaded=uploadedAssets.length>0; csvMeta.textContent=csvUploaded?`Loaded ${uploadedAssets.length} assets`:'No valid asset IDs found.'; csvMeta.classList.remove('hidden'); bulkReady(); }
-    function parseAssetsFromCSV(text){ const rows=text.split(/\r?\n/).map(r=>r.trim()).filter(Boolean); const out=[]; for(let i=0;i<rows.length;i++){ const cols=rows[i].split(',').map(c=>c.trim()); if(!cols.length) continue; const first=cols[0]; if(i===0 && /asset|bmp|id/i.test(first)) continue; out.push({assetId:first}); } return out; }
+    function parseAssetsFromCSV(text){ const rows=text.split(/\r?\n/).map(r=>r.trim()).filter(Boolean); const out=[]; for(let i=0;i<rows.length;i++){ const cols=rows[i].split(',').map(c=>c.trim()); if(!cols.length) continue; const first=(cols[0]||'').trim().toUpperCase(); if(i===0 && /asset|bmp|id/i.test(first)) continue; out.push({assetId:first}); } return out; }
 
-    // Single via bulk (MD SHA) – zipped only
-    async function singleViaBulk(assetId, dsKey, uiFmt){
-      const fmt = mdshaZipFmt(uiFmt); // kmlzip | geojsonzip | shpzip
-      let lastErr;
+    // ---------- Single MD SHA via bulk with fallback to single ----------
+    async function singleMdsha(assetId, dsKey, uiFmt){
+      // 1) Try BULK with explicit per-item dataset
+      const bulkFmt = toMdshaZip(uiFmt); // kmlzip | geojsonzip | shpzip
+      let lastErr=null;
       for(const ep of BULK_ENDPOINTS){
         try{
-          const payload={ items:[{assetId}], defaultDataset:dsKey, dataset:dsKey, datasetKey:dsKey, single:true, format:fmt };
+          const payload={
+            items:[{assetId, dataset:dsKey, datasetKey:dsKey}],
+            defaultDataset:dsKey, dataset:dsKey, datasetKey:dsKey,
+            single:true, format:bulkFmt
+          };
           const {res, blob}=await postBinary(ep,payload);
-          const name=suggestedFilename(res, `${assetId}_${fmt}.zip`);
+          const name=suggestedFilename(res, `${assetId}_${bulkFmt}.zip`);
+          saveBlob(blob,name);
+          return; // success
+        }catch(e){
+          lastErr=e;
+          // If this is the "No features found" case, fall through to single fallback
+          const body = (e.body||'').toLowerCase();
+          const notFound = e.status===404 && body.includes('no features found');
+          if(!notFound) {
+            // Not the nf case? keep trying other endpoints
+            continue;
+          }
+          break;
+        }
+      }
+
+      // 2) Fallback to SINGLE with zipped format (some stacks allow it)
+      for(const ep of SINGLE_ENDPOINTS){
+        try{
+          const payload={ assetId, dataset:dsKey, datasetKey:dsKey, format:bulkFmt };
+          const {res, blob}=await postBinary(ep,payload);
+          const name=suggestedFilename(res, `${assetId}_${bulkFmt}.zip`);
           saveBlob(blob,name);
           return;
         }catch(e){ lastErr=e; }
       }
-      throw lastErr || new Error('bulk single failed');
+      throw lastErr || new Error('single-mdsha failed');
     }
 
-    async function singleDirect(assetId, dsKey, uiFmt){
-      const fmt = nonMdshaFmt(uiFmt); // kml | geojson | shpzip
+    // ---------- Single Fairfax ----------
+    async function singleFairfax(assetId, dsKey, uiFmt){
+      const fmt = toFxFmt(uiFmt); // kml | geojson | shpzip
       let lastErr;
       for(const ep of SINGLE_ENDPOINTS){
         try{
           const payload={ assetId, dataset:dsKey, datasetKey:dsKey, format:fmt };
           const {res, blob}=await postBinary(ep,payload);
           const outName = fmt==='kml'?`${assetId}.kml`:fmt==='geojson'?`${assetId}.geojson`:`${assetId}.zip`;
-          const name=suggestedFilename(res,outName);
-          saveBlob(blob,name);
+          saveBlob(blob, suggestedFilename(res,outName));
           return;
         }catch(e){ lastErr=e; }
       }
-      throw lastErr || new Error('single failed');
+      throw lastErr || new Error('single-fairfax failed');
     }
 
     // Single click
-    singleBtn.addEventListener('click', async ()=>{
+    $('singleConvertBtn').addEventListener('click', async ()=>{
       if(singleBtn.disabled) return;
       const dsKey=resolveDatasetKey(datasetSelect);
-      const assetId=assetNumber.value.trim();
+      const assetId=(assetNumber.value||'').trim().toUpperCase();
       const formats=singleFormats.filter(cb=>cb.checked).map(cb=>cb.value);
       googleBox.classList.add('hidden'); currentGoogleLink=null;
+
       singleBtn.textContent='Generating Files...'; enable(singleBtn,false);
       try{
         for(const uiFmt of formats){
-          if(isMdsha(dsKey)) await singleViaBulk(assetId, dsKey, uiFmt);
-          else               await singleDirect(assetId, dsKey, uiFmt);
+          if(isMdsha(dsKey)) await singleMdsha(assetId, dsKey, uiFmt);
+          else               await singleFairfax(assetId, dsKey, uiFmt);
         }
-        currentGoogleLink = await buildGoogleLink(assetId, dsKey);
+        // Link (best-effort)
+        try { currentGoogleLink = await buildGoogleLink(assetId, dsKey); }
+        catch { currentGoogleLink = null; }
         if(currentGoogleLink) googleBox.classList.remove('hidden');
+
         singleBtn.textContent='Download Files';
         singleBtn.classList.remove('from-map-blue','to-map-green'); singleBtn.classList.add('from-green-500','to-green-600'); enable(singleBtn,true);
       }catch(err){
@@ -404,24 +431,25 @@
       }
     });
 
-    // Bulk click
-    bulkBtn.addEventListener('click', async ()=>{
+    // ---------- Bulk click (unchanged behavior, but item format normalized) ----------
+    $('bulkConvertBtn').addEventListener('click', async ()=>{
       if(bulkBtn.disabled) return;
       const dsKey=resolveDatasetKey(bulkDataset);
       const formats=bulkFormats.filter(cb=>cb.checked).map(cb=>cb.value);
       bulkBtn.textContent='Processing Assets...'; enable(bulkBtn,false);
       try{
         for(const uiFmt of formats){
-          const fmt = isMdsha(dsKey) ? mdshaZipFmt(uiFmt) : nonMdshaFmt(uiFmt);
+          const fmt = isMdsha(dsKey) ? toMdshaZip(uiFmt) : toFxFmt(uiFmt);
           let lastErr;
           for(const ep of BULK_ENDPOINTS){
             try{
-              const payload={ items:uploadedAssets, defaultDataset:dsKey, dataset:dsKey, datasetKey:dsKey, format:fmt };
+              // Normalize uploaded assets (uppercase ids)
+              const items = uploadedAssets.map(it=>({assetId:(it.assetId||'').toUpperCase(), dataset:dsKey, datasetKey:dsKey}));
+              const payload={ items, defaultDataset:dsKey, dataset:dsKey, datasetKey:dsKey, format:fmt };
               const {res, blob}=await postBinary(ep,payload);
               const name=suggestedFilename(res, `mapbuddy_${fmt}.zip`);
               saveBlob(blob,name);
-              lastErr=null;
-              break;
+              lastErr=null; break;
             }catch(e){ lastErr=e; }
           }
           if(lastErr) throw lastErr;
@@ -436,8 +464,9 @@
       }
     });
 
-    // Google Maps link: prefer backend link; for MD SHA no bulk-geojson fallback (zip only).
+    // ---------- Google link ----------
     async function buildGoogleLink(assetId, datasetKey){
+      // Prefer backend
       for(const ep of LINK_ENDPOINTS){
         try{
           const url=`${ep}?assetId=${encodeURIComponent(assetId)}&dataset=${encodeURIComponent(datasetKey)}`;
@@ -445,17 +474,15 @@
           if(json&&json.url) return json.url;
         }catch(e){}
       }
+      // Last-ditch fallback (Fairfax only; MD SHA requires secured geometry)
       if(!isMdsha(datasetKey)){
-        for(const ep of SINGLE_ENDPOINTS){
-          try{
-            const payload={assetId,dataset:datasetKey,datasetKey:datasetKey,format:'geojson',silent:true};
-            const txt=await postForText(ep,payload);
-            const gj=JSON.parse(txt); const ll=centroidFromGeoJSON(gj);
-            if(ll){const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`;}
-          }catch(e){}
-        }
+        try{
+          const payload={assetId,dataset:datasetKey,datasetKey:datasetKey,format:'geojson',silent:true};
+          const res=await postJSON(SINGLE_ENDPOINTS[0],payload);
+          const ll=centroidFromGeoJSON(res); if(ll){const [lat,lng]=ll; return `https://www.google.com/maps?q=${lat},${lng}`;}
+        }catch(e){}
       }
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assetId+' '+datasetKey)}`;
+      return null;
     }
 
     function centroidFromGeoJSON(gj){
@@ -478,6 +505,7 @@
     window.copyGoogleMapsLink=()=>{ if(!currentGoogleLink) return; navigator.clipboard.writeText(currentGoogleLink).then(()=>alert('Google Maps link copied!')); };
     window.openGoogleMaps =()=>{ if(!currentGoogleLink) return; window.open(currentGoogleLink,'_blank','noopener,noreferrer'); };
 
+    // init
     document.addEventListener('DOMContentLoaded',()=>{singleReady();bulkReady();});
   </script>
 </body>
