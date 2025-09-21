@@ -278,24 +278,31 @@
     }
 
     // ---- helpers for convert with diagnostics
-    async function convertOnce(assetId, dataset, fmt){
-      const body = dataset ? { assetId, dataset, format: fmt } : { assetId, format: fmt };
-      const res = await fetch(API_CONVERT, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body)
-      });
-      if(!res.ok){
-        let detail = "";
-        try{ const j = await res.json(); detail = j?.error || JSON.stringify(j)||""; }catch{}
-        const err = new Error(detail || `HTTP ${res.status}`);
-        err.status = res.status;
-        err.detail = detail.toLowerCase();
-        err.isUnknownDataset = /unknown dataset/.test(err.detail);
-        err.isNoFeature = /no feature found/.test(err.detail);
-        err.payload = body;
-        throw err;
-      }
-      return res;
-    }
+  async function convertOnce(assetId, dataset, fmt){
+  // Normalize any stray 'shpzip' to 'shapefile' for single conversions
+  const fmtNorm = fmt === "shpzip" ? "shapefile" : fmt;
+
+  const body = dataset
+    ? { assetId, dataset, format: fmtNorm }
+    : { assetId, format: fmtNorm };
+
+  const res = await fetch(API_CONVERT, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  });
+
+  if(!res.ok){
+    let detail = "";
+    try{ const j = await res.json(); detail = j?.error || JSON.stringify(j)||""; }catch{}
+    const err = new Error(detail || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.detail = (detail||"").toLowerCase();
+    err.payload = body; // <-- will now show format:'shapefile'
+    throw err;
+  }
+  return res;
+}
 
     // ===== Single: locate (soft-404) → convert with fallbacks =====
     async function runSingle(){
