@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -189,14 +188,14 @@
   </footer>
 
   <script>
-    console.log("MapBuddy build 2025-09-20 — locate-soft404 + convert-fallbacks");
+    console.log("MapBuddy build 2025-09-20 — shapefile-fix + form-reset");
 
     const $ = (id) => document.getElementById(id);
     const API_CONVERT = "/api/convert";
     const API_BULK    = "/api/bulk";
     const API_LOCATE  = "/api/locate";
 
-    // Toggle
+    // Toggle tabs
     function setMode(mode){
       const single = mode === "single";
       $("singleMode").classList.toggle("hidden", !single);
@@ -216,7 +215,7 @@
       const ds=$("singleDataset").value;
       $("singleHint").textContent = ds==="fairfax_bmps"
         ? "Fairfax: Use FACILITY_ID (e.g., WP0399)."
-        : "MD SHA: Use the official ID exactly (e.g., 210049UT).";
+        : ds ? "MD SHA: Use the official ID exactly (e.g., 210049UT)." : "";
     }
     function anySingleFmt(){ return $("fmtKmlSingle").checked || $("fmtGeoSingle").checked || $("fmtShpSingle").checked; }
     function enableSingle(){ $("singleRunBtn").disabled = !($("singleDataset").value && ($("singleAsset").value||"").trim() && anySingleFmt()); }
@@ -250,7 +249,15 @@
       const f=e.dataTransfer.files?.[0]; if(f) attachCSV(f);
     });
 
-    // Geometry fallback for GM link
+    // GM link helpers
+    function showGmapsLink(url){
+      $("gmLinkText").textContent=url;
+      $("gmOpen").onclick=()=>window.open(url,"_blank","noopener");
+      $("gmCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(url); alert("Google Maps link copied."); }catch{ alert(url); } };
+      $("gmWrap").classList.remove("hidden");
+    }
+
+    // Parse center from returned file (fallback if /api/locate misses)
     function centroidOfCoords(coords){
       try{ let flat=[];(function walk(c){ if(typeof c[0]==="number"){flat.push(c);return;} for(const x of c) walk(x); })(coords);
         if(!flat.length) return null; let sx=0,sy=0; for(const [lon,lat] of flat){sx+=lon;sy+=lat;}
@@ -271,120 +278,98 @@
         return null;
       }catch{return null;}
     }
-    function showGmapsLink(url){
-      $("gmLinkText").textContent=url;
-      $("gmOpen").onclick=()=>window.open(url,"_blank","noopener");
-      $("gmCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(url); alert("Google Maps link copied."); }catch{ alert(url); } };
-      $("gmWrap").classList.remove("hidden");
-    }
 
-    // ---- helpers for convert with diagnostics
+    // ---- conversion helper
     async function convertOnce(assetId, dataset, fmt){
-      const body = dataset ? { assetId, dataset, format: fmt } : { assetId, format: fmt };
       const res = await fetch(API_CONVERT, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body)
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ assetId, dataset, format: fmt }) // dataset ALWAYS included
       });
       if(!res.ok){
         let detail = "";
         try{ const j = await res.json(); detail = j?.error || JSON.stringify(j)||""; }catch{}
         const err = new Error(detail || `HTTP ${res.status}`);
-        err.status = res.status;
-        err.detail = detail.toLowerCase();
-        err.isUnknownDataset = /unknown dataset/.test(err.detail);
-        err.isNoFeature = /no feature found/.test(err.detail);
-        err.payload = body;
+        err.payload = { assetId, dataset, format: fmt };
         throw err;
       }
       return res;
     }
 
-    // ===== Single: locate (soft-404) → convert with fallbacks =====
+    // ---- reset single form after success
+    function resetSingleForm(){
+      $("singleAsset").value = "";
+      $("fmtKmlSingle").checked = true;
+      $("fmtGeoSingle").checked = false;
+      $("fmtShpSingle").checked = false;
+      $("gmWrap").classList.add("hidden");
+      enableSingle();
+    }
+
+    // ===== Single flow =====
     async function runSingle(){
       const btn=$("singleRunBtn");
-      let dataset=$("singleDataset").value;      // backend keys
-      let assetId=($("singleAsset").value||"").trim();
+      const dataset=$("singleDataset").value;
+      const assetIdRaw=($("singleAsset").value||"").trim();
+      const assetId=assetIdRaw.toUpperCase();
 
-      const formats=[]; if($("fmtKmlSingle").checked) formats.push("kml"); if($("fmtGeoSingle").checked) formats.push("geojson"); if($("fmtShpSingle").checked) formats.push("shpzip");
+      const formats=[];
+      if($("fmtKmlSingle").checked)  formats.push("kml");
+      if($("fmtGeoSingle").checked)  formats.push("geojson");
+      if($("fmtShpSingle").checked)  formats.push("shapefile"); // <-- canonical
+
       if(!dataset||!assetId||!formats.length) return;
 
-      btn.disabled=true; btn.textContent="Locating…"; $("gmWrap").classList.add("hidden");
+      btn.disabled=true;
+      btn.textContent="Locating…";
+      $("gmWrap").classList.add("hidden");
 
-      let locateOk = false; let hadLocateFeature = false;
+      // Best-effort locate to show a Google Maps link (does not block conversion)
       try{
-        const loc = await fetch(API_LOCATE, {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
+        const lr = await fetch(API_LOCATE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assetId, dataset })
         });
-        if(loc.ok){
-          locateOk = true;
-          const info = await loc.json();
-          if(info?.assetId) assetId = info.assetId;
-          if(info?.googleMapsUrl){ showGmapsLink(info.googleMapsUrl); hadLocateFeature = true; }
-        }else{
-          // SOFT-404: proceed to convert if it's a simple "No feature found"
-          let msg = `Locate failed (HTTP ${loc.status})`;
-          try{ const e=await loc.json(); if(e?.error) msg=e.error; }catch{}
-          if(String(msg).toLowerCase().includes("no feature")){
-            console.warn("Locate 404 (no feature) — continuing to convert fallbacks");
-          }else{
-            // true failure (e.g., bad dataset key) — still proceed to convert fallbacks
-            console.warn("Locate failed:", msg);
-          }
+        if (lr.ok) {
+          const info = await lr.json();
+          if (info?.googleMapsUrl) showGmapsLink(info.googleMapsUrl);
         }
+      }catch{/* ignore */}
 
-        // 2) CONVERT with fallbacks
-        btn.textContent = "Converting…";
-        let haveCoords = hadLocateFeature;
+      btn.textContent = "Converting…";
 
-        for(const fmt of formats){
-          let res=null, lastErr=null;
+      try{
+        for (const fmt of formats) {
+          const res = await convertOnce(assetId, dataset, fmt);
 
-          // Try in this order:
-          // A) as selected
-          // B) mdsha_tmdl_any (search all TMDL layers)
-          // C) no dataset (let backend guess via assetId)
-          const candidates = [dataset, "mdsha_tmdl_any", null]
-            .filter((v, i, a) => a.indexOf(v) === i); // unique
-
-          for(const ds of candidates){
-            try{
-              res = await convertOnce(assetId, ds, fmt);
-              // success
-              break;
-            }catch(e){
-              lastErr = e;
-              // on unknown dataset, keep trying others
-              // on no feature, keep trying others
-              continue;
-            }
-          }
-          if(!res) throw lastErr;
-
+          // Download
           const clone = res.clone();
           const blob  = await res.blob();
-          const ext   = fmt==="shpzip" ? "zip" : fmt;
+          const ext   = fmt === "shapefile" ? "zip" : (fmt === "geojson" ? "geojson" : "kml");
           const a = document.createElement("a");
           a.href = URL.createObjectURL(blob);
           a.download = `mapbuddy_${assetId}.${ext}`;
           document.body.appendChild(a); a.click(); a.remove();
           URL.revokeObjectURL(a.href);
 
-          if(!haveCoords && (fmt==="kml" || fmt==="geojson")){
+          // If no maps link shown yet, derive from file center
+          if ($("gmWrap").classList.contains("hidden") && (fmt==="kml" || fmt==="geojson")) {
             const txt = await clone.text();
             const pt  = fmt==="geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
-            if(pt){
-              const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId+" "+(dataset||""))})`;
+            if (pt) {
+              const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}`;
               showGmapsLink(gm);
-              haveCoords = true;
             }
           }
         }
 
+        // Success → reset for next asset
+        resetSingleForm();
+
       }catch(err){
-        alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}${err.payload ? `\nPayload: ${JSON.stringify(err.payload)}` : ""}`);
+        alert(`Single conversion failed. Please retry.\n\nLast error: ${err.message}\nPayload: ${JSON.stringify(err.payload || {assetId,dataset,format:formats.join(",")})}`);
       }finally{
-        // ALWAYS reset button state
         btn.textContent = "Generate Map Files";
         btn.disabled = false;
       }
