@@ -16,6 +16,10 @@
     .card{box-shadow:0 10px 30px rgba(2,6,23,.05)}
     .tab-active{color:white;background-image:linear-gradient(90deg,#2563eb 0%,#059669 100%)}
     .tab-idle{color:rgb(71 85 105)}
+    /* Scrollbar for preview */
+    #bulkPreview { scrollbar-width: thin; scrollbar-color: #2563eb #f3f4f6; }
+    #bulkPreview::-webkit-scrollbar { width: 6px; background: #f3f4f6;}
+    #bulkPreview::-webkit-scrollbar-thumb { background: #2563eb; border-radius: 3px;}
   </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen text-slate-900">
@@ -100,8 +104,8 @@
       <!-- BULK -->
       <div id="bulkMode" class="bg-white rounded-2xl p-8 card hidden">
         <h3 class="text-2xl font-bold text-center mb-8">Bulk Asset Conversion</h3>
-
         <div class="grid md:grid-cols-2 gap-8">
+          <!-- LEFT: Upload UI -->
           <div class="space-y-6">
             <div>
               <label class="block text-sm font-semibold mb-2">Dataset</label>
@@ -117,7 +121,6 @@
                 <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
               </select>
             </div>
-
             <div id="drop" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-map-blue cursor-pointer">
               <div class="w-12 h-12 rounded-full btn-grad mx-auto mb-4 grid place-items-center text-white font-bold">CSV</div>
               <div class="font-semibold">Drop your CSV file here</div>
@@ -125,7 +128,6 @@
               <input id="file" type="file" accept=".csv" class="hidden"/>
               <div id="loaded" class="text-xs text-gray-500 mt-3"></div>
             </div>
-
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-900 text-sm">
               <div class="font-semibold mb-1">CSV Format Requirements</div>
               <ul class="list-disc pl-5 space-y-1">
@@ -135,8 +137,13 @@
               </ul>
             </div>
           </div>
+          <!-- RIGHT: Preview/Editor -->
+          <div>
+            <div class="font-semibold text-base mb-2">Assets Preview</div>
+            <ul id="bulkPreview" class="space-y-2 max-h-72 overflow-y-auto border rounded-lg p-3 bg-slate-50 text-sm"></ul>
+            <div id="bulkNone" class="text-gray-400 text-sm py-5 text-center">No assets loaded yet.</div>
+          </div>
         </div>
-
         <div class="text-center mt-8">
           <button id="bulkRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Process Bulk KML</button>
         </div>
@@ -188,10 +195,11 @@
       const r=new FileReader();
       r.onload=()=>{
         const lines=parseCsvText(String(r.result||""));
-        if(lines.length<=1){ $("loaded").textContent="No rows found (need a header + at least 1 row)."; bulkItems=[]; return; }
+        if(lines.length<=1){ $("loaded").textContent="No rows found (need a header + at least 1 row)."; bulkItems=[]; renderBulkPreview(); return; }
         const ids=lines.slice(1).map(row=> (row.split(/,(.*)/s)[0]||"").trim()).filter(Boolean);
         bulkItems=ids.map(x=>({assetId:x}));
         $("loaded").textContent=`Loaded ${bulkItems.length} assets`;
+        renderBulkPreview();
       };
       r.readAsText(file);
     }
@@ -204,6 +212,43 @@
       $("drop").classList.remove("border-map-blue","bg-blue-50");
       const f=e.dataTransfer.files?.[0]; if(f) attachCSV(f);
     });
+
+    function renderBulkPreview() {
+      const preview = $("bulkPreview");
+      const none = $("bulkNone");
+      preview.innerHTML = "";
+      if (!bulkItems.length) {
+        none.style.display = "";
+        return;
+      }
+      none.style.display = "none";
+      bulkItems.forEach((item, i) => {
+        const li = document.createElement("li");
+        li.className = "flex items-center gap-2 bg-white rounded px-3 py-2 border hover:border-blue-400";
+        // Asset edit input
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.value = item.assetId;
+        inp.className = "flex-1 bg-transparent outline-none border-0";
+        inp.onchange = (e) => {
+          bulkItems[i].assetId = e.target.value.trim();
+          inp.value = bulkItems[i].assetId;
+        };
+        // Delete button
+        const del = document.createElement("button");
+        del.className = "pill px-2 py-1 text-xs bg-red-100 text-red-600 hover:bg-red-200";
+        del.textContent = "Delete";
+        del.onclick = () => {
+          bulkItems.splice(i, 1);
+          renderBulkPreview();
+          $("loaded").textContent = bulkItems.length ? `Loaded ${bulkItems.length} assets` : "";
+        };
+        li.appendChild(inp);
+        li.appendChild(del);
+        preview.appendChild(li);
+      });
+    }
+    renderBulkPreview();
 
     // Geometry fallback for GM link
     function centroidOfCoords(coords){
@@ -266,7 +311,6 @@
           if(info?.assetId) assetId = info.assetId;
           if(info?.googleMapsUrl){ showGmapsLink(info.googleMapsUrl); hadLocateFeature = true; }
         }else{
-          // SOFT-404: proceed to convert if it's a simple "No feature found"
           let msg = `Locate failed (HTTP ${loc.status})`;
           try{ const e=await loc.json(); if(e?.error) msg=e.error; }catch{}
           if(String(msg).toLowerCase().includes("no feature")){
@@ -278,7 +322,6 @@
 
         btn.textContent = "Converting…";
 
-        // For KML, try selected, fallback to mdsha_tmdl_any, then null (let backend guess)
         const candidates = [dataset, "mdsha_tmdl_any", null].filter((v, i, a) => a.indexOf(v) === i);
         let res=null, lastErr=null;
         for(const ds of candidates){
@@ -300,7 +343,6 @@
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(a.href);
 
-        // Parse KML and show Google Maps link if not already shown
         if(!hadLocateFeature){
           const txt = await clone.text();
           const pt  = parseKMLForLatLng(txt);
@@ -327,7 +369,6 @@
       const btn=$("bulkRunBtn");
       btn.disabled=true; btn.textContent="Processing Assets…";
       try{
-        // Only generate KML zip
         const fmt = "kmlzip";
         const payload={ items: bulkItems, defaultDataset: dataset, format: fmt };
         const res=await fetch(API_BULK,{ method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
