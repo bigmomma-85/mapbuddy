@@ -6,21 +6,16 @@ export const config = { runtime: "nodejs" };
 
 // ---------- Dataset registry ----------
 const DATASETS = {
-  // Fairfax — MapServer
   fairfax_bmps: {
     base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
     idFields: ["FACILITY_ID"],
     label: "Fairfax — Stormwater Facilities",
   },
-
-  // MDOT SHA Landscape — MapServer
   mdsha_landscape: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
     idFields: ["LOD_ID"],
     label: "MDOT SHA — Managed Landscape",
   },
-
-  // TMDL layers — FeatureServer
   mdsha_tmdl_structures: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/0",
     idFields: ["SWM_FAC_NO", "ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"],
@@ -31,7 +26,6 @@ const DATASETS = {
     idFields: ["SWM_FAC_NO", "ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"],
     label: "TMDL — Retrofits",
   },
-  // IMPORTANT: Tree Plantings layer 2 matches on STRU_ID only.
   mdsha_tmdl_tree_plantings: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/2",
     idFields: ["STRU_ID"],
@@ -53,7 +47,6 @@ const DATASETS = {
     label: "TMDL — Outfall Stabilizations",
   }
 };
-
 const TMDL_ANY = [
   "mdsha_tmdl_structures",
   "mdsha_tmdl_retrofits",
@@ -202,9 +195,19 @@ export default async function handler(req, res) {
     const input = { "in.json": Buffer.from(JSON.stringify(fc)) };
     const outName = outFmt === "kml" ? "out.kml" : (outFmt === "geojson" ? "out.geojson" : "out.zip");
     const cmd = `-i in.json -clean -o ${outName} format=${outFmt}`;
-    const outputs = await msApply(cmd, input);
+
+    let outputs;
+    try {
+      outputs = await msApply(cmd, input);
+    } catch (err) {
+      throw new Error("Mapshaper failed: " + (err.message || err));
+    }
+
+    if (outputs['stderr']) {
+      throw new Error('Mapshaper error: ' + outputs['stderr'].toString());
+    }
     const buf = outputs[outName];
-    if (!buf) throw new Error(`Mapshaper produced no ${outName}`);
+    if (!buf) throw new Error(`Mapshaper produced no ${outName}, outputs: ${Object.keys(outputs).join(", ")}`);
 
     const safe = String(assetId).replace(/[^\w.-]+/g, "_");
     if (outFmt === "kml") {
@@ -220,6 +223,6 @@ export default async function handler(req, res) {
     res.status(200).send(buf);
 
   } catch (err) {
-    res.status(500).json({ error: "Conversion failed", details: String(err?.message || err) });
+    res.status(500).json({ error: "Conversion failed", details: String(err?.message || err), stack: err?.stack });
   }
 }
