@@ -292,15 +292,19 @@
     body: JSON.stringify(body)
   });
 
-  if(!res.ok){
-    let detail = "";
-    try{ const j = await res.json(); detail = j?.error || JSON.stringify(j)||""; }catch{}
-    const err = new Error(detail || `HTTP ${res.status}`);
-    err.status = res.status;
-    err.detail = (detail||"").toLowerCase();
-    err.payload = body; // <-- will now show format:'shapefile'
-    throw err;
-  }
+  if (!res.ok) {
+  let detail = "";
+  try {
+    const j = await res.json();
+    // prefer .details if present (from the API patch above)
+    detail = j?.details || j?.error || JSON.stringify(j) || "";
+  } catch {}
+  const err = new Error(detail || `HTTP ${res.status}`);
+  err.status = res.status;
+  err.detail = (detail || "").toLowerCase();
+  err.payload = body;
+  throw err;
+}
   return res;
 }
 
