@@ -278,143 +278,116 @@
     }
 
     // ---- helpers for convert with diagnostics
-  // Replace the whole convertOnce with this
-async function convertOnce(assetId, dataset, fmt){
-  // match bulk: send shpzip to the API
-  const fmtForApi = fmt === "shapefile" ? "shpzip" : fmt;
-
-  const body = dataset ? { assetId, dataset, format: fmtForApi } : { assetId, format: fmtForApi };
-
-  // one-shot executor
-  const exec = () => fetch(API_CONVERT, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify(body)
-  });
-
-  // try once
-  let res = await exec();
-
-  // If a platform crash happened (500 with no useful JSON), sleep and retry once
-  if (res.status >= 500) {
-    try { await res.clone().json(); } catch {
-      await new Promise(r => setTimeout(r, 900)); // brief backoff
-      res = await exec();
+    async function convertOnce(assetId, dataset, fmt){
+      const body = dataset ? { assetId, dataset, format: fmt } : { assetId, format: fmt };
+      const res = await fetch(API_CONVERT, {
+        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body)
+      });
+      if(!res.ok){
+        let detail = "";
+        try{ const j = await res.json(); detail = j?.error || JSON.stringify(j)||""; }catch{}
+        const err = new Error(detail || `HTTP ${res.status}`);
+        err.status = res.status;
+        err.detail = detail.toLowerCase();
+        err.isUnknownDataset = /unknown dataset/.test(err.detail);
+        err.isNoFeature = /no feature found/.test(err.detail);
+        err.payload = body;
+        throw err;
+      }
+      return res;
     }
-  }
 
-  if (!res.ok) {
-    let detail = "";
-    try { const j = await res.json(); detail = j?.error || j?.details || JSON.stringify(j) || ""; } catch {}
-    const err = new Error(detail || `HTTP ${res.status}`);
-    err.status = res.status;
-    err.detail = (detail || "").toLowerCase();
-    err.isUnknownDataset = /unknown dataset/.test(err.detail);
-    err.isNoFeature = /no feature found/.test(err.detail);
-    err.payload = body;
-    throw err;
-  }
-  return res;
-}
     // ===== Single: locate (soft-404) → convert with fallbacks =====
-async function runSingle(){
-  const btn = $("singleRunBtn");
-  let dataset = $("singleDataset").value;          // backend keys
-  let assetId = ($("singleAsset").value || "").trim();
+    async function runSingle(){
+      const btn=$("singleRunBtn");
+      let dataset=$("singleDataset").value;      // backend keys
+      let assetId=($("singleAsset").value||"").trim();
 
-  const formats = [];
-  if ($("fmtKmlSingle").checked)  formats.push("kml");
-  if ($("fmtGeoSingle").checked)  formats.push("geojson");
-  if ($("fmtShpSingle").checked)  formats.push("shpzip"); // or "shpzip" if your API expects that
-  if (!dataset || !assetId || !formats.length) return;
+      const formats=[]; if($("fmtKmlSingle").checked) formats.push("kml"); if($("fmtGeoSingle").checked) formats.push("geojson"); if($("fmtShpSingle").checked) formats.push("shpzip");
+      if(!dataset||!assetId||!formats.length) return;
 
-  btn.disabled = true;
-  btn.textContent = "Locating…";
-  $("gmWrap").classList.add("hidden");
+      btn.disabled=true; btn.textContent="Locating…"; $("gmWrap").classList.add("hidden");
 
-  let hadLocateFeature = false;
+      let locateOk = false; let hadLocateFeature = false;
+      try{
+        const loc = await fetch(API_LOCATE, {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ assetId, dataset })
+        });
+        if(loc.ok){
+          locateOk = true;
+          const info = await loc.json();
+          if(info?.assetId) assetId = info.assetId;
+          if(info?.googleMapsUrl){ showGmapsLink(info.googleMapsUrl); hadLocateFeature = true; }
+        }else{
+          // SOFT-404: proceed to convert if it's a simple "No feature found"
+          let msg = `Locate failed (HTTP ${loc.status})`;
+          try{ const e=await loc.json(); if(e?.error) msg=e.error; }catch{}
+          if(String(msg).toLowerCase().includes("no feature")){
+            console.warn("Locate 404 (no feature) — continuing to convert fallbacks");
+          }else{
+            // true failure (e.g., bad dataset key) — still proceed to convert fallbacks
+            console.warn("Locate failed:", msg);
+          }
+        }
 
-  try {
-    // 1) LOCATE (soft-404 allowed)
-    const loc = await fetch(API_LOCATE, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assetId, dataset })
-    });
+        // 2) CONVERT with fallbacks
+        btn.textContent = "Converting…";
+        let haveCoords = hadLocateFeature;
 
-    if (loc.ok) {
-      const info = await loc.json();
-      if (info?.assetId) assetId = info.assetId;
-      if (info?.googleMapsUrl) { showGmapsLink(info.googleMapsUrl); hadLocateFeature = true; }
-    } else {
-      // proceed anyway if it's a simple "No feature" 404
-      let msg = `Locate failed (HTTP ${loc.status})`;
-      try { const e = await loc.json(); if (e?.error) msg = e.error; } catch {}
-      if (String(msg).toLowerCase().includes("no feature")) {
-        console.warn("Locate 404 (no feature) — continuing to convert fallbacks");
-      } else {
-        console.warn("Locate failed:", msg);
+        for(const fmt of formats){
+          let res=null, lastErr=null;
+
+          // Try in this order:
+          // A) as selected
+          // B) mdsha_tmdl_any (search all TMDL layers)
+          // C) no dataset (let backend guess via assetId)
+          const candidates = [dataset, "mdsha_tmdl_any", null]
+            .filter((v, i, a) => a.indexOf(v) === i); // unique
+
+          for(const ds of candidates){
+            try{
+              res = await convertOnce(assetId, ds, fmt);
+              // success
+              break;
+            }catch(e){
+              lastErr = e;
+              // on unknown dataset, keep trying others
+              // on no feature, keep trying others
+              continue;
+            }
+          }
+          if(!res) throw lastErr;
+
+          const clone = res.clone();
+          const blob  = await res.blob();
+          const ext   = fmt==="shpzip" ? "zip" : fmt;
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = `mapbuddy_${assetId}.${ext}`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(a.href);
+
+          if(!haveCoords && (fmt==="kml" || fmt==="geojson")){
+            const txt = await clone.text();
+            const pt  = fmt==="geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
+            if(pt){
+              const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId+" "+(dataset||""))})`;
+              showGmapsLink(gm);
+              haveCoords = true;
+            }
+          }
+        }
+
+      }catch(err){
+        alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}${err.payload ? `\nPayload: ${JSON.stringify(err.payload)}` : ""}`);
+      }finally{
+        // ALWAYS reset button state
+        btn.textContent = "Generate Map Files";
+        btn.disabled = false;
       }
     }
-
-    // 2) CONVERT with fallbacks
-    btn.textContent = "Converting…";
-    let haveCoords = hadLocateFeature;
-
-    for (const fmt of formats) {
-      let res = null, lastErr = null;
-
-      // Try: selected dataset → mdsha_tmdl_any → no dataset
-      const candidates = [dataset, "mdsha_tmdl_any", null]
-        .filter((v, i, a) => a.indexOf(v) === i); // unique
-
-      for (const ds of candidates) {
-        try {
-          res = await convertOnce(assetId, ds, fmt);
-          break; // success
-        } catch (e) {
-          lastErr = e; continue;
-        }
-      }
-      if (!res) throw lastErr;
-
-      // download
-      const clone = res.clone();
-      const blob  = await res.blob();
-      const ext   = fmt === "shpzip" ? "zip" : fmt; // download name
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `mapbuddy_${assetId}.${ext}`;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(a.href);
-
-      // derive GM link if locate failed but we got kml/geojson
-      if (!haveCoords && (fmt === "kml" || fmt === "geojson")) {
-        const txt = await clone.text();
-        const pt  = fmt === "geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
-        if (pt) {
-          const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId+" "+(dataset||""))})`;
-          showGmapsLink(gm);
-          haveCoords = true;
-        }
-      }
-    }
-
-    // ---------- RESET START (only after ALL formats succeed) ----------
-    $("singleAsset").value = "";
-    $("fmtKmlSingle").checked = true;     // default back to KML
-    $("fmtGeoSingle").checked = false;
-    $("fmtShpSingle").checked = false;
-    $("gmWrap").classList.add("hidden");  // hide previous GM link
-    enableSingle();                       // re-evaluate button disabled state
-    // ---------- RESET END ---------------------------------------------
-  } catch (err) {
-    alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}${err.payload ? `\nPayload: ${JSON.stringify(err.payload)}` : ""}`);
-  } finally {
-    btn.textContent = "Generate Map Files";
-    btn.disabled = false;
-  }
-}
     $("singleRunBtn").addEventListener("click", runSingle);
 
     // ===== Bulk (unchanged) =====
