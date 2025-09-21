@@ -82,10 +82,10 @@
             <p id="singleHint" class="text-xs text-gray-500 mt-1"></p>
           </div>
 
-<div class="text-center flex flex-col sm:flex-row sm:justify-center gap-4">
-  <button id="singleRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Generate KML & Google Maps Link</button>
-  <button id="singleResetBtn" type="button" class="pill px-8 py-4 border border-gray-300 bg-white text-gray-700 font-semibold text-lg hover:border-map-blue hover:bg-blue-50">Reset</button>
-</div>
+          <div class="text-center flex flex-col sm:flex-row sm:justify-center gap-4">
+            <button id="singleRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Generate KML & Google Maps Link</button>
+            <button id="singleResetBtn" type="button" class="pill px-8 py-4 border border-gray-300 bg-white text-gray-700 font-semibold text-lg hover:border-map-blue hover:bg-blue-50">Reset</button>
+          </div>
 
           <div id="gmWrap" class="hidden mt-6 p-4 rounded-xl border border-blue-200 bg-blue-50 flex items-center justify-between">
             <div class="text-sm">
@@ -146,9 +146,9 @@
           </div>
         </div>
         <div class="text-center mt-8 flex flex-col sm:flex-row sm:justify-center gap-4">
-  <button id="bulkRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Process Bulk KML</button>
-  <button id="bulkResetBtn" type="button" class="pill px-8 py-4 border border-gray-300 bg-white text-gray-700 font-semibold text-lg hover:border-map-blue hover:bg-blue-50">Reset</button>
-</div>
+          <button id="bulkRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Process Bulk KML</button>
+          <button id="bulkResetBtn" type="button" class="pill px-8 py-4 border border-gray-300 bg-white text-gray-700 font-semibold text-lg hover:border-map-blue hover:bg-blue-50">Reset</button>
+        </div>
       </div>
     </div>
   </section>
@@ -391,6 +391,28 @@
       }
     }
     $("bulkRunBtn").addEventListener("click", runBulk);
+
+    // ----------------- RESET BUTTONS -----------------
+    // Add these after all your other JS
+
+    // SINGLE Reset
+    $("singleResetBtn").onclick = () => {
+      $("singleDataset").selectedIndex = 0;
+      $("singleAsset").value = "";
+      $("gmWrap").classList.add("hidden");
+      refreshHints();
+      enableSingle();
+    };
+
+    // BULK Reset
+    $("bulkResetBtn").onclick = () => {
+      $("bulkDataset").selectedIndex = 0;
+      $("file").value = "";
+      bulkItems = [];
+      $("loaded").textContent = "";
+      renderBulkPreview();
+    };
+    // -------------------------------------------------
   </script>
 </body>
 </html>
