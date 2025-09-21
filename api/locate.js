@@ -16,29 +16,31 @@ const DATASETS = {
   },
   mdsha_tmdl_structures: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/0",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"]
+    idFields: ["SWM_FAC_NO", "ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
   mdsha_tmdl_retrofits: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/1",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"]
+    idFields: ["SWM_FAC_NO", "ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
   mdsha_tmdl_tree_plantings: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/2",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
+    idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
   mdsha_tmdl_pavement_removals: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/3",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
+    idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
   mdsha_tmdl_stream_restorations: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/4",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
+    idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
   mdsha_tmdl_outfall_stabilizations: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/5",
-    idFields: ["STRU_ID", "ASSET_ID", "NAME", "PROJECT_ID"]
+    idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   }
 };
+
+const esc = (v) => String(v).replace(/'/g, "''");
 
 function tmdlVariants(assetId){
   const s = String(assetId || "").trim().toUpperCase();
@@ -46,15 +48,27 @@ function tmdlVariants(assetId){
   if (m) { const num=m[1], suf=m[2]; return [ `${num}${suf}`, `${num}-${suf}`, `${num} ${suf}` ]; }
   return [s, s.replace(/-/g,""), s.replace(/\s+/g,""), s.replace(/(\d+)([A-Za-z]+)/,'$1-$2'), s.replace(/(\d+)([A-Za-z]+)/,'$1 $2')];
 }
-function whereFrom(fields, id, isTmdl){
-  const vals = isTmdl ? tmdlVariants(id) : [String(id)];
-  const esc = (v) => String(v).replace(/'/g, "''");
+
+function buildWhereExact(fields, value, isTmdl){
+  const vals = isTmdl ? tmdlVariants(value) : [String(value)];
   const ors = [];
-  for (const f of fields) for (const v of vals) ors.push(`UPPER(${f}) = UPPER('${esc(v)}')`);
+  for(const f of fields) for(const v of vals) ors.push(`UPPER(${f}) = UPPER('${esc(v)}')`);
+  return ors.join(" OR ");
+}
+function buildWhereLike(fields, value, isTmdl){
+  const vals = isTmdl ? tmdlVariants(value) : [String(value)];
+  const patterns = new Set();
+  for (const v of vals) {
+    patterns.add(`%${v}%`);
+    patterns.add(`%${v.replace(/-/g," ")}%`);
+    patterns.add(`%${v.replace(/\s+/g,"-")}%`);
+  }
+  const ors = [];
+  for(const f of fields) for(const p of patterns) ors.push(`UPPER(${f}) LIKE UPPER('${esc(p)}')`);
   return ors.join(" OR ");
 }
 
-// centroid utils
+// centroid helpers for GeoJSON geometry
 function bboxCenter(coordsFlat){ let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
   for(const [x,y] of coordsFlat){ if(x<minx)minx=x; if(y<miny)miny=y; if(x>maxx)maxx=x; if(y>maxy)maxy=y; }
   return { lng:(minx+maxx)/2, lat:(miny+maxy)/2 }; }
@@ -90,20 +104,36 @@ export default async function handler(req, res){
     const ds = DATASETS[dataset];
     if(!ds){ res.status(400).json({ error:`Unknown dataset '${dataset}'` }); return; }
 
+    const isTmdl = dataset.startsWith("mdsha_tmdl_");
     const url = `${ds.base}/query`;
-    const params = {
-      where: whereFrom(ds.idFields, assetId, dataset.startsWith("mdsha_tmdl_")),
+
+    // Pass A: exact
+    const paramsExact = {
+      where: buildWhereExact(ds.idFields, assetId, isTmdl),
       outFields: "*",
       returnGeometry: true,
       outSR: 4326,
-      f: "json" // FeatureServer expects JSON
+      f: "json"
     };
+    let r = await axios.get(url, { params: paramsExact, timeout: 20000 });
+    let feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
 
-    const { data } = await axios.get(url, { params, timeout: 20000 });
-    const feats = (data && Array.isArray(data.features)) ? data.features : [];
+    // Pass B: LIKE
+    if(!feats.length){
+      const paramsLike = {
+        where: buildWhereLike(ds.idFields, assetId, isTmdl),
+        outFields: "*",
+        returnGeometry: true,
+        outSR: 4326,
+        f: "json"
+      };
+      r = await axios.get(url, { params: paramsLike, timeout: 20000 });
+      feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+    }
+
     if(!feats.length){ res.status(404).json({ error: "No feature found" }); return; }
 
-    // make centroid from ESRI geometry
+    // centroid from ESRI geometry
     const g = feats[0].geometry || {};
     let geo = null;
     if (Array.isArray(g.rings))      geo = { type:"Polygon",        coordinates:g.rings };
@@ -115,6 +145,7 @@ export default async function handler(req, res){
 
     const googleMapsUrl = `https://www.google.com/maps?q=${c.lat.toFixed(6)},${c.lng.toFixed(6)}`;
     res.status(200).json({ assetId, dataset, centroid:c, googleMapsUrl, properties: feats[0].attributes || {} });
+
   }catch(err){
     res.status(500).json({ error: err?.message || String(err) });
   }
