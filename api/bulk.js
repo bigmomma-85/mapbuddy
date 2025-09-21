@@ -81,9 +81,6 @@ function mapsUrl(lat, lng) {
 }
 
 // ---------- datasets ----------
-//
-// Key is what you send in "dataset" or select as defaultDataset.
-// You may also pass the human label (the UI text) — we map both.
 
 const DATASETS = {
   // Fairfax County DPWES Stormwater Facilities
@@ -104,11 +101,11 @@ const DATASETS = {
   "MDOT SHA — TMDL (Auto-detect)": { alias: true }, // UI group label
   "TMDL — Stormwater Control Structures": {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"],
+    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID", "ASSET_ID", "STRU_ID"],
   },
   "TMDL — Retrofits": {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1",
-    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID"],
+    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID", "ASSET_ID", "STRU_ID"],
   },
   "TMDL — Tree Plantings": {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2",
@@ -128,77 +125,84 @@ const DATASETS = {
   },
 };
 
-// allow referencing by label or by key
 function resolveDatasetKey(input) {
   if (DATASETS[input] && !DATASETS[input].alias) return input;
-  // match by label
   for (const [k, v] of Object.entries(DATASETS)) {
     if (!v.alias && (v.label === input)) return k;
   }
   return null;
 }
 
-// ---------- ArcGIS fetch ----------
+// TMDL variant generator (as in single)
+function tmdlVariants(assetId) {
+  const s = String(assetId || "").trim().toUpperCase();
+  const m = s.match(/^(\d+)\s*-?\s*([A-Z]{2,})$/);
+  if (m) {
+    const num = m[1], suf = m[2];
+    return [ `${num}${suf}`, `${num}-${suf}`, `${num} ${suf}` ];
+  }
+  return [s, s.replace(/-/g,""), s.replace(/\s+/g,""), s.replace(/(\d+)([A-Za-z]+)/,'$1-$2'), s.replace(/(\d+)([A-Za-z]+)/,'$1 $2')];
+}
 
-async function fetchGeoJSONFeature(datasetKey, assetId) {
+// Try all id fields and variants, like single endpoint
+async function fetchGeoJSONFeatureWithFallback(datasetKey, assetId) {
   const def = DATASETS[datasetKey];
   if (!def) return null;
 
-  // try f=geojson first, then fallback to f=json
+  const useVariants = datasetKey.startsWith("TMDL");
+  const variants = useVariants ? tmdlVariants(assetId) : [assetId];
+
   for (const fld of def.idFields || []) {
-    // f=geojson attempt
-    try {
-      const p = new URLSearchParams({
-        where: `${fld}='${assetId}'`,
-        outFields: "*",
-        returnGeometry: "true",
-        outSR: "4326",
-        f: "geojson",
-      });
-      const url = `${def.base}/query?${p.toString()}`;
-      const r = await axios.get(url, { timeout: 15000 });
-      const feats = r.data?.features || [];
-      if (feats.length) return feats[0];
-    } catch { /* fall through */ }
+    for (const v of variants) {
+      // Try f=geojson
+      try {
+        const p = new URLSearchParams({
+          where: `${fld}='${v}'`,
+          outFields: "*",
+          returnGeometry: "true",
+          outSR: "4326",
+          f: "geojson",
+        });
+        const url = `${def.base}/query?${p.toString()}`;
+        const r = await axios.get(url, { timeout: 15000 });
+        const feats = r.data?.features || [];
+        if (feats.length) return feats[0];
+      } catch { /* fall through */ }
 
-    // fallback f=json -> not usually needed for Fairfax/TMDL, but safe
-    try {
-      const p = new URLSearchParams({
-        where: `${fld}='${assetId}'`,
-        outFields: "*",
-        returnGeometry: "true",
-        outSR: "4326",
-        f: "json",
-      });
-      const url = `${def.base}/query?${p.toString()}`;
-      const r = await axios.get(url, { timeout: 15000 });
-      const feats = r.data?.features || [];
-      if (feats.length) {
-        // lightweight conversion
-        const f = feats[0];
-        const geom = f.geometry;
-        let gj = null;
-
-        if (geom?.x !== undefined && geom?.y !== undefined) {
-          gj = { type: "Point", coordinates: [geom.x, geom.y] };
-        } else if (geom?.rings) {
-          gj = { type: "Polygon", coordinates: geom.rings };
-        } else if (geom?.paths) {
-          gj = { type: "LineString", coordinates: geom.paths[0] };
+      // Fallback f=json
+      try {
+        const p = new URLSearchParams({
+          where: `${fld}='${v}'`,
+          outFields: "*",
+          returnGeometry: "true",
+          outSR: "4326",
+          f: "json",
+        });
+        const url = `${def.base}/query?${p.toString()}`;
+        const r = await axios.get(url, { timeout: 15000 });
+        const feats = r.data?.features || [];
+        if (feats.length) {
+          const f = feats[0];
+          const geom = f.geometry;
+          let gj = null;
+          if (geom?.x !== undefined && geom?.y !== undefined) {
+            gj = { type: "Point", coordinates: [geom.x, geom.y] };
+          } else if (geom?.rings) {
+            gj = { type: "Polygon", coordinates: geom.rings };
+          } else if (geom?.paths) {
+            gj = { type: "LineString", coordinates: geom.paths[0] };
+          }
+          if (gj) {
+            return {
+              type: "Feature",
+              properties: f.attributes || {},
+              geometry: gj,
+            };
+          }
         }
-
-        if (gj) {
-          return {
-            type: "Feature",
-            properties: f.attributes || {},
-            geometry: gj,
-          };
-        }
-      }
-    } catch { /* continue */ }
-
-    // be nice to the server if we loop many fields
-    await sleep(80);
+      } catch { /* continue */ }
+      await sleep(80);
+    }
   }
 
   return null;
@@ -217,7 +221,6 @@ async function featureToShapefileParts(feature, outBase) {
   const apply = await getApply();
   const files = { "in.json": JSON.stringify(feature) };
   const out = await apply("-i in.json -o out.shp format=shapefile", files);
-  // rename "out.*" to "<outBase>.*"
   const parts = [];
   for (const [name, content] of Object.entries(out)) {
     const renamed = name.replace(/^out(\.|$)/, `${outBase}$1`);
@@ -237,16 +240,15 @@ export default async function handler(req, res) {
   const body = await readJsonBody(req);
   const items = Array.isArray(body.items) ? body.items : [];
   let defDataset = body.defaultDataset;
-  const format = String(body.format || "").toLowerCase(); // kmlzip | geojsonzip | shpzip | kml | geojson
+  const format = String(body.format || "").toLowerCase();
 
   if (!items.length) {
     res.status(400).json({ error: "No items provided" });
     return;
   }
 
-  // resolve default dataset label or key to our key
   if (defDataset) {
-    defDataset = resolveDatasetKey(defDataset) || defDataset; // keep if already a key
+    defDataset = resolveDatasetKey(defDataset) || defDataset;
   }
 
   const zip = new AdmZip();
@@ -257,11 +259,8 @@ export default async function handler(req, res) {
     const assetId = String(it.assetId || "").trim();
     if (!assetId) continue;
 
-    // choose dataset: row.dataset > defaultDataset
     let datasetKey = it.dataset ? (resolveDatasetKey(it.dataset) || it.dataset) : defDataset;
-    // if row-specific dataset missing and default missing, try a very light auto-detect:
     if (!datasetKey) {
-      // heuristic: "UT" looks like TMDL tree/retrofit IDs; otherwise assume Fairfax
       datasetKey = assetId.endsWith("UT")
         ? "TMDL — Tree Plantings"
         : "fairfax_bmps";
@@ -275,7 +274,7 @@ export default async function handler(req, res) {
 
     let feature = null;
     try {
-      feature = await fetchGeoJSONFeature(datasetKey, assetId);
+      feature = await fetchGeoJSONFeatureWithFallback(datasetKey, assetId);
     } catch (e) {
       // swallow, will be handled below
     }
@@ -285,7 +284,6 @@ export default async function handler(req, res) {
       continue;
     }
 
-    // centroid + Google Maps URL
     const c = centroidOf(feature);
     if (c) {
       linkRows.push([assetId, datasetKey, String(c.lat), String(c.lng), mapsUrl(c.lat, c.lng), "ok"]);
@@ -293,10 +291,8 @@ export default async function handler(req, res) {
       linkRows.push([assetId, datasetKey, "", "", "", "ok (no centroid)"]);
     }
 
-    // file base name = just the assetId (as requested)
     const base = sanitizeName(assetId);
 
-    // write according to requested format
     try {
       if (format === "kmlzip") {
         const buf = await featureToKmlBuffer(feature);
@@ -306,13 +302,9 @@ export default async function handler(req, res) {
       } else if (format === "shpzip") {
         const parts = await featureToShapefileParts(feature, base);
         for (const [name, buf] of parts) zip.addFile(name, buf);
-      } else if (format === "kml") {
-        // merged single file (non-zip) — we’ll collect below
-        // handled after the loop
-      } else if (format === "geojson") {
-        // merged single file — handled after the loop
+      } else if (format === "kml" || format === "geojson") {
+        // merged single file (non-zip) — not supported in bulk
       } else {
-        // default to kmlzip if unrecognized
         const buf = await featureToKmlBuffer(feature);
         zip.addFile(`${base}.kml`, buf);
       }
@@ -323,15 +315,11 @@ export default async function handler(req, res) {
     }
   }
 
-  // If format is kml or geojson (non-zip, merged), return single file directly
   if (format === "kml" || format === "geojson") {
-    // For merged exports, we re-fetch features that succeeded above to avoid holding all in memory,
-    // but here we can simply tell users bulk merged is zip-only to keep the endpoint predictable.
     res.status(400).json({ error: "For bulk, use kmlzip, geojsonzip or shpzip." });
     return;
   }
 
-  // add the google maps CSV
   const csv = linkRows.map(r => r.map(v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v).join(",")).join("\n");
   zip.addFile("mapbuddy_links.csv", Buffer.from(csv, "utf8"));
 
@@ -340,7 +328,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  // send zip
   const zipName =
     format === "geojsonzip" ? "mapbuddy_geojson.zip" :
     format === "shpzip"     ? "mapbuddy_shapefile.zip" :
