@@ -6,7 +6,9 @@
   <title>MapBuddy — Asset to Map Files</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { theme:{ extend:{ colors:{ 'map-blue':'#2563eb','map-green':'#059669','map-orange':'#ea580c' } } } }
+    tailwind.config = { theme: { extend: {
+      colors: { 'map-blue':'#2563eb', 'map-green':'#059669', 'map-orange':'#ea580c' }
+    } } }
   </script>
   <style>
     :root { --line:#E5E7EB; --primary:#2563eb; }
@@ -53,7 +55,6 @@
         </div>
       </div>
 
-      <!-- SINGLE -->
       <div id="singleMode" class="bg-white rounded-2xl p-8 card mb-10">
         <h3 class="text-2xl font-bold text-center mb-8">Single Asset Conversion</h3>
         <div class="max-w-3xl mx-auto space-y-6">
@@ -62,13 +63,13 @@
             <select id="singleDataset" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-map-blue">
               <option value="">Select Dataset</option>
               <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-              <option value="tmdl_scs">TMDL — Stormwater Control Structures (MD SHA)</option>
-              <option value="tmdl_retrofits">TMDL — Retrofits (MD SHA)</option>
-              <option value="tmdl_trees">TMDL — Tree Plantings (MD SHA)</option>
-              <option value="tmdl_pavement">TMDL — Pavement Removals (MD SHA)</option>
-              <option value="tmdl_streams">TMDL — Stream Restorations (MD SHA)</option>
-              <option value="tmdl_outfalls">TMDL — Outfall Stabilizations (MD SHA)</option>
-              <option value="mdsha_lod">MDOT SHA — Managed Landscape (LOD_ID)</option>
+              <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures (MD SHA)</option>
+              <option value="mdsha_tmdl_retrofits">TMDL — Retrofits (MD SHA)</option>
+              <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings (MD SHA)</option>
+              <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals (MD SHA)</option>
+              <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations (MD SHA)</option>
+              <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations (MD SHA)</option>
+              <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
             </select>
           </div>
 
@@ -115,7 +116,6 @@
         </div>
       </div>
 
-      <!-- BULK -->
       <div id="bulkMode" class="bg-white rounded-2xl p-8 card hidden">
         <h3 class="text-2xl font-bold text-center mb-8">Bulk Asset Conversion</h3>
 
@@ -126,13 +126,13 @@
               <select id="bulkDataset" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-map-blue">
                 <option value="">Select Dataset</option>
                 <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
-                <option value="tmdl_scs">TMDL — Stormwater Control Structures (MD SHA)</option>
-                <option value="tmdl_retrofits">TMDL — Retrofits (MD SHA)</option>
-                <option value="tmdl_trees">TMDL — Tree Plantings (MD SHA)</option>
-                <option value="tmdl_pavement">TMDL — Pavement Removals (MD SHA)</option>
-                <option value="tmdl_streams">TMDL — Stream Restorations (MD SHA)</option>
-                <option value="tmdl_outfalls">TMDL — Outfall Stabilizations (MD SHA)</option>
-                <option value="mdsha_lod">MDOT SHA — Managed Landscape (LOD_ID)</option>
+                <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures (MD SHA)</option>
+                <option value="mdsha_tmdl_retrofits">TMDL — Retrofits (MD SHA)</option>
+                <option value="mdsha_tmdl_tree_plantings">TMDL — Tree Plantings (MD SHA)</option>
+                <option value="mdsha_tmdl_pavement_removals">TMDL — Pavement Removals (MD SHA)</option>
+                <option value="mdsha_tmdl_stream_restorations">TMDL — Stream Restorations (MD SHA)</option>
+                <option value="mdsha_tmdl_outfall_stabilizations">TMDL — Outfall Stabilizations (MD SHA)</option>
+                <option value="mdsha_landscape">MDOT SHA — Managed Landscape (LOD_ID)</option>
               </select>
             </div>
 
@@ -188,7 +188,7 @@
 
   <script>
     // ===== Build stamp =====
-    console.log("MapBuddy build 2025-09-20—adaptive-dataset-discovery v1");
+    console.log("MapBuddy build 2025-09-20—single-locate-dataset-adaptive");
 
     // ===== Tiny helpers =====
     const $ = (id) => document.getElementById(id);
@@ -197,7 +197,7 @@
     const API_LOCATE  = "/api/locate";
 
     // Toggle
-    function setMode(mode){
+    function setMode(mode) {
       const single = mode === "single";
       $("singleMode").classList.toggle("hidden", !single);
       $("bulkMode").classList.toggle("hidden", single);
@@ -207,19 +207,21 @@
       $("bulkModeBtn").classList.toggle("tab-idle", single);
       localStorage.setItem("mb_mode", mode);
     }
-    $("singleModeBtn").onclick=()=>setMode("single");
-    $("bulkModeBtn").onclick=()=>setMode("bulk");
-    setMode(localStorage.getItem("mb_mode")||"single");
+    $("singleModeBtn").onclick = () => setMode("single");
+    $("bulkModeBtn").onclick   = () => setMode("bulk");
+    setMode(localStorage.getItem("mb_mode") || "single");
 
     // Hints / enable
-    function refreshHints(){
-      const ds=$("singleDataset").value;
-      $("singleHint").textContent = ds==="fairfax_bmps"
+    function refreshHints() {
+      const ds = $("singleDataset").value;
+      $("singleHint").textContent = ds === "fairfax_bmps"
         ? "Fairfax: Use FACILITY_ID (e.g., WP0399)."
         : "MD SHA TMDL/LOD: Use the official ID exactly (e.g., 210049UT).";
     }
     function anySingleFmt(){ return $("fmtKmlSingle").checked || $("fmtGeoSingle").checked || $("fmtShpSingle").checked; }
-    function enableSingle(){ $("singleRunBtn").disabled = !($("singleDataset").value && ($("singleAsset").value||"").trim() && anySingleFmt()); }
+    function enableSingle(){
+      $("singleRunBtn").disabled = !($("singleDataset").value && ($("singleAsset").value||"").trim() && anySingleFmt());
+    }
     ["singleDataset","singleAsset","fmtKmlSingle","fmtGeoSingle","fmtShpSingle"].forEach(id=>{
       $(id).addEventListener("input", ()=>{refreshHints(); enableSingle();});
       $(id).addEventListener("change", ()=>{refreshHints(); enableSingle();});
@@ -228,7 +230,9 @@
 
     // CSV (bulk)
     let bulkItems = [];
-    function parseCsvText(text){ return (text||"").replace(/^\uFEFF/,"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean); }
+    function parseCsvText(text){
+      return (text||"").replace(/^\uFEFF/,"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    }
     function attachCSV(file){
       const r=new FileReader();
       r.onload=()=>{
@@ -247,68 +251,30 @@
     $("drop").addEventListener("drop", e=>{
       e.preventDefault();
       $("drop").classList.remove("border-map-blue","bg-blue-50");
-      const f=e.dataTransfer.files?.[0]; if(f) attachCSV(f);
+      const f=e.dataTransfer.files?.[0];
+      if(f) attachCSV(f);
     });
 
-    // ===== Dataset discovery & matching =====
-    async function fetchDatasetCatalog(){
-      // try a few conventional endpoints; ignore failures
-      const endpoints = ["/api/datasets","/api/list-datasets","/api/catalog"];
-      for(const url of endpoints){
-        try{
-          const r = await fetch(url, { method:"GET" });
-          if(!r.ok) continue;
-          const j = await r.json();
-          // Normalize to flat list of strings
-          if(Array.isArray(j)) return j.map(String);
-          if(j && Array.isArray(j.datasets)) return j.datasets.map(String);
-          if(j && typeof j === "object") return Object.values(j).flat().map(String);
-        }catch{}
-      }
-      return []; // none available
-    }
-
-    function normalizeKey(s){ return String(s||"").toLowerCase(); }
-    function tokens(s){ return normalizeKey(s).split(/[^a-z0-9]+/).filter(Boolean); }
-    function scoreKeyAgainstIntent(key, intentWords){
-      const ks = tokens(key);
-      let score = 0;
-      for(const w of intentWords){
-        if(ks.includes(w)) score += 3;
-        else if(ks.some(k => k.startsWith(w) || w.startsWith(k))) score += 2;
-      }
-      // prefer tmdl/mdot/sha presence for tree intent
-      if(ks.includes("tmdl")) score += 2;
-      if(ks.includes("sha") || ks.includes("mdot")) score += 1;
-      return score;
-    }
-    function pickBestDataset(intentBaseKey, catalog){
-      const intentWords = tokens(intentBaseKey).concat(["tree","trees","plant","planting","plantings"]);
-      let best = null, bestScore = -1;
-      for(const key of catalog){
-        const s = scoreKeyAgainstIntent(key, intentWords);
-        if(s > bestScore){ bestScore = s; best = key; }
-      }
-      return best;
-    }
-
-    // ===== Geometry helpers (for GM link fallback) =====
+    // Geometry helpers (for fallback GM link)
     function centroidOfCoords(coords){
-      try{ let flat=[];(function walk(c){ if(typeof c[0]==="number"){flat.push(c);return;} for(const x of c) walk(x); })(coords);
+      try{
+        let flat=[];(function walk(c){ if(typeof c[0]==="number"){flat.push(c);return;} for(const x of c) walk(x); })(coords);
         if(!flat.length) return null; let sx=0,sy=0; for(const [lon,lat] of flat){sx+=lon;sy+=lat;}
         return { lat: sy/flat.length, lon: sx/flat.length };
       }catch{return null;}
     }
     function parseGeoJSONForLatLng(txt){
-      try{ const gj=JSON.parse(txt);
-        const feat=(gj.type==="Feature")?gj:(gj.features&&gj.features[0]); if(!feat) return null;
-        const g=(feat.type==="Feature")?feat.geometry:feat; if(!g) return null;
-        if(g.type==="Point"){ const [lon,lat]=g.coordinates; return {lat,lon}; }
+      try{
+        const gj=JSON.parse(txt);
+        const feat=(gj.type==="Feature")?gj:(gj.features&&gj.features[0]);
+        if(!feat) return null; const g=(feat.type==="Feature")?feat.geometry:feat;
+        if(!g) return null; if(g.type==="Point"){ const [lon,lat]=g.coordinates; return {lat,lon}; }
         return centroidOfCoords(g.coordinates);
       }catch{return null;}
     }
     function parseKMLForLatLng(txt){
-      try{ const m=txt.match(/<coordinates>\s*([-\d.]+),([-\d.]+)/i);
+      try{
+        const m=txt.match(/<coordinates>\s*([-\d.]+),([-\d.]+)/i);
         if(m){ const lon=parseFloat(m[1]), lat=parseFloat(m[2]); if(isFinite(lat)&&isFinite(lon)) return {lat,lon}; }
         return null;
       }catch{return null;}
@@ -320,88 +286,121 @@
       $("gmWrap").classList.remove("hidden");
     }
 
-    async function tryConvertSingle(assetId, dataset, fmt){
-      const body = dataset ? { assetId, dataset, format: fmt } : { assetId, format: fmt };
+    // ===== Adaptive dataset resolution for SINGLE =====
+    const DATASET_ALIAS = {
+      "mdsha_tmdl_structures": ["tmdl_scs", "tmdl_control_structures", "scs", "sha_scs"],
+      "mdsha_tmdl_retrofits": ["tmdl_retrofits", "tmdl_retros", "retrofits"],
+      "mdsha_tmdl_tree_plantings": ["tmdl_trees", "tmdl_tree_plantings", "sha_trees", "trees", "tmdl_tree", "tmdl_trees_2024"],
+      "mdsha_tmdl_pavement_removals": ["tmdl_pavement", "tmdl_pave", "pavement"],
+      "mdsha_tmdl_stream_restorations": ["tmdl_streams", "tmdl_stream_restorations", "streams"],
+      "mdsha_tmdl_outfall_stabilizations": ["tmdl_outfalls", "tmdl_outfall_stab", "outfalls"],
+      "mdsha_landscape": ["mdsha_lod"]
+    };
+    function pickFromLocate(info, selected){
+      // prefer canonical keys the backend might return
+      return info?.convertDataset || info?.dataset || info?.layerKey || info?.layer || info?.collection || info?.table || selected;
+    }
+    function candidateDatasets(primary){
+      const list = [primary, ...(DATASET_ALIAS[primary]||[])];
+      // remove dupes and falsy
+      return Array.from(new Set(list.filter(Boolean)));
+    }
+
+    async function tryConvert(assetId, datasetOrNull, fmt){
+      const body = datasetOrNull ? { assetId, dataset: datasetOrNull, format: fmt }
+                                   : { assetId, format: fmt }; // last-resort: no dataset
       const res = await fetch(API_CONVERT, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body)
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
       });
-      if(!res.ok){
-        let d=""; try{ d=await res.json(); }catch{}
-        const dStr=typeof d==="object"?JSON.stringify(d):(d||"");
-        const err=new Error(`/api/convert → ${res.status} ${dStr}\nPayload: ${JSON.stringify(body)}`);
-        err._detail = (dStr||"").toLowerCase();
+      if (!res.ok) {
+        let d = ""; try { d = await res.json(); } catch {}
+        const dStr = typeof d === "object" ? JSON.stringify(d) : (d || "");
+        const err = new Error(`/api/convert → ${res.status} ${dStr}\nPayload: ${JSON.stringify(body)}`);
+        err._detail = dStr;
         throw err;
       }
       return res;
     }
 
-    // ===== Single flow: locate → dataset discovery (if needed) → convert =====
     async function runSingle(){
       const btn=$("singleRunBtn");
       let dataset=$("singleDataset").value;
       let assetId=($("singleAsset").value||"").trim();
 
-      const formats=[]; if($("fmtKmlSingle").checked) formats.push("kml"); if($("fmtGeoSingle").checked) formats.push("geojson"); if($("fmtShpSingle").checked) formats.push("shpzip");
+      const formats=[];
+      if($("fmtKmlSingle").checked) formats.push("kml");
+      if($("fmtGeoSingle").checked) formats.push("geojson");
+      if($("fmtShpSingle").checked) formats.push("shpzip");
       if(!dataset||!assetId||!formats.length) return;
 
-      btn.disabled=true; btn.textContent="Locating…"; $("gmWrap").classList.add("hidden");
+      btn.disabled=true;
+      btn.textContent="Locating…";
+      $("gmWrap").classList.add("hidden");
 
       try{
-        // 1) LOCATE first (critical)
-        const loc = await fetch(API_LOCATE, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ assetId, dataset }) });
-        if(!loc.ok){ let msg=`Locate failed (HTTP ${loc.status})`; try{ const e=await loc.json(); if(e?.error) msg=e.error; }catch{} throw new Error(msg); }
+        // 1) Locate first (critical for TMDL)
+        const loc = await fetch(API_LOCATE, {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ assetId, dataset })
+        });
+        if(!loc.ok){
+          let msg=`Locate failed (HTTP ${loc.status})`;
+          try{ const e=await loc.json(); if(e?.error) msg=e.error; }catch{}
+          throw new Error(msg);
+        }
         const info = await loc.json();
         if(info?.assetId) assetId = info.assetId;
-        let resolved = info?.convertDataset || info?.dataset || info?.layerKey || info?.layer || info?.collection || info?.table || dataset;
+        // Learn canonical dataset key (if provided)
+        let primaryDataset = pickFromLocate(info, dataset);
 
         if(info?.googleMapsUrl){ showGmapsLink(info.googleMapsUrl); }
 
-        // 2) If convert says "unknown dataset", auto-discover catalog and map
-        async function resolveWorkingDataset(baseKey){
-          // Try baseKey first; if unknown, fetch catalog and pick best
-          let catalog = [];
-          // dry-run ping: try convert with baseKey+KML and trap unknown dataset to trigger discovery
-          try { await tryConvertSingle(assetId, baseKey, "kml"); return baseKey; }
-          catch(e){
-            if(!(String(e._detail).includes("unknown dataset"))) return baseKey; // not a dataset problem
-          }
-          // fetch catalog from backend and pick best match
-          catalog = await fetchDatasetCatalog();
-          if(!catalog.length) return baseKey; // nothing to learn
-          const best = pickBestDataset(baseKey, catalog);
-          return best || baseKey;
-        }
-
-        // 3) CONVERT with adaptive dataset resolution
+        // 2) Convert with adaptive dataset fallbacks
         btn.textContent="Converting…";
         let haveCoords = !!info?.googleMapsUrl;
 
-        // Pre-resolve a working dataset key if we're on tmdl trees
-        if(resolved && resolved.toLowerCase().includes("tmdl") && resolved.toLowerCase().includes("tree")){
-          resolved = await resolveWorkingDataset(resolved);
-        }
-
         for(const fmt of formats){
           let res=null, lastErr=null;
-          // attempt with resolved key; if unknown, try without dataset (asset-driven)
-          try{ res = await tryConvertSingle(assetId, resolved, fmt); }
-          catch(e){
-            if(String(e._detail||"").includes("unknown dataset")){
-              try{ res = await tryConvertSingle(assetId, null, fmt); } catch(e2){ lastErr = e2; }
-            } else { lastErr = e; }
+
+          // Try primary + aliases; then (as last resort) no dataset
+          const tries = [...candidateDatasets(primaryDataset), null];
+
+          for(const dsTry of tries){
+            try {
+              res = await tryConvert(assetId, dsTry, fmt);
+              primaryDataset = dsTry || primaryDataset; // remember success
+              break;
+            } catch(e) {
+              // Detect "Unknown dataset" and continue to next candidate
+              if(String(e._detail||"").toLowerCase().includes("unknown dataset")){
+                lastErr = e; continue;
+              }
+              // Other errors (e.g., 404 no feature) — keep the last and continue
+              lastErr = e; continue;
+            }
           }
           if(!res) throw lastErr;
 
-          const clone=res.clone();
-          const blob=await res.blob();
+          const clone = res.clone();
+          const blob = await res.blob();
           const ext = fmt==="shpzip" ? "zip" : fmt;
-          const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`mapbuddy_${assetId}.${ext}`;
-          document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = `mapbuddy_${assetId}.${ext}`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(a.href);
 
-          if(!haveCoords && (fmt==="kml"||fmt==="geojson")){
-            const txt=await clone.text();
-            const pt= fmt==="geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
-            if(pt){ const gm=`https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId+" "+(resolved||""))})`; showGmapsLink(gm); haveCoords=true; }
+          if(!haveCoords && (fmt==="kml" || fmt==="geojson")){
+            const txt = await clone.text();
+            const pt = fmt==="geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
+            if(pt){
+              const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId + " " + (primaryDataset||""))})`;
+              showGmapsLink(gm);
+              haveCoords=true;
+            }
           }
         }
 
@@ -414,7 +413,7 @@
     }
     $("singleRunBtn").addEventListener("click", runSingle);
 
-    // ===== Bulk (unchanged; uses defaultDataset) =====
+    // ===== Bulk (unchanged) =====
     async function runBulk(){
       const dataset=$("bulkDataset").value;
       const wantKml=$("fmtKmlBulk").checked, wantGeo=$("fmtGeoBulk").checked, wantShp=$("fmtShpBulk").checked;
@@ -436,7 +435,8 @@
           }
           const blob=await res.blob();
           const filename=res.headers.get("x-filename")||`mapbuddy_${dataset}_${fmt}.zip`;
-          const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename;
+          const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob); a.download=filename;
           document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
         }
       }catch(err){
@@ -447,6 +447,7 @@
       }
     }
     $("bulkRunBtn").addEventListener("click", runBulk);
+
   </script>
 </body>
 </html>
