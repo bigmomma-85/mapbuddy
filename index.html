@@ -279,37 +279,43 @@
 
     // ---- helpers for convert with diagnostics
   // Replace the whole convertOnce with this
-async function convertOnce(assetId, dataset, fmt) {
-  const body = dataset ? { assetId, dataset, format: fmt } : { assetId, format: fmt };
-  const res = await fetch("/api/convert", {
+async function convertOnce(assetId, dataset, fmt){
+  // match bulk: send shpzip to the API
+  const fmtForApi = fmt === "shapefile" ? "shpzip" : fmt;
+
+  const body = dataset ? { assetId, dataset, format: fmtForApi } : { assetId, format: fmtForApi };
+
+  // one-shot executor
+  const exec = () => fetch(API_CONVERT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type":"application/json" },
     body: JSON.stringify(body)
   });
 
-  if (!res.ok) {
-    // read raw text first; parse if JSON; otherwise show the text
-    let detail = `HTTP ${res.status}`;
-    try {
-      const txt = await res.text();
-      try {
-        const j = JSON.parse(txt);
-        detail = j?.error || j?.details || txt || detail;
-      } catch {
-        // not JSON, keep raw text if present
-        if (txt && txt.trim()) detail = txt.trim();
-      }
-    } catch { /* ignore */ }
+  // try once
+  let res = await exec();
 
-    const err = new Error(detail);
+  // If a platform crash happened (500 with no useful JSON), sleep and retry once
+  if (res.status >= 500) {
+    try { await res.clone().json(); } catch {
+      await new Promise(r => setTimeout(r, 900)); // brief backoff
+      res = await exec();
+    }
+  }
+
+  if (!res.ok) {
+    let detail = "";
+    try { const j = await res.json(); detail = j?.error || j?.details || JSON.stringify(j) || ""; } catch {}
+    const err = new Error(detail || `HTTP ${res.status}`);
     err.status = res.status;
+    err.detail = (detail || "").toLowerCase();
+    err.isUnknownDataset = /unknown dataset/.test(err.detail);
+    err.isNoFeature = /no feature found/.test(err.detail);
     err.payload = body;
     throw err;
   }
-
   return res;
 }
-
     // ===== Single: locate (soft-404) → convert with fallbacks =====
 async function runSingle(){
   const btn = $("singleRunBtn");
@@ -319,7 +325,7 @@ async function runSingle(){
   const formats = [];
   if ($("fmtKmlSingle").checked)  formats.push("kml");
   if ($("fmtGeoSingle").checked)  formats.push("geojson");
-  if ($("fmtShpSingle").checked)  formats.push("shapefile"); // or "shpzip" if your API expects that
+  if ($("fmtShpSingle").checked)  formats.push("shpzip"); // or "shpzip" if your API expects that
   if (!dataset || !assetId || !formats.length) return;
 
   btn.disabled = true;
@@ -375,7 +381,7 @@ async function runSingle(){
       // download
       const clone = res.clone();
       const blob  = await res.blob();
-      const ext   = fmt === "shapefile" ? "zip" : fmt; // download name
+      const ext   = fmt === "shpzip" ? "zip" : fmt; // download name
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = `mapbuddy_${assetId}.${ext}`;
