@@ -27,7 +27,6 @@ async function getApply() {
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
 const isOk = (v) => v !== undefined && v !== null && v !== "";
 const sanitizeName = (s) => String(s).replace(/[^\w\-]+/g, "_");
 
@@ -89,6 +88,11 @@ const DATASETS = {
     base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
     idFields: ["FACILITY_ID"],
   },
+  "Fairfax — Stormwater Facilities (FACILITY_ID)": {
+    label: "Fairfax — Stormwater Facilities (FACILITY_ID)",
+    base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
+    idFields: ["FACILITY_ID"],
+  },
 
   // MDOT SHA Managed Landscape
   mdsha_landscape: {
@@ -96,37 +100,97 @@ const DATASETS = {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
     idFields: ["LOD_ID"],
   },
+  "MDOT SHA — Managed Landscape (LOD_ID)": {
+    label: "MDOT SHA — Managed Landscape (LOD_ID)",
+    base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
+    idFields: ["LOD_ID"],
+  },
 
-  // TMDL (MD SHA)
-  "MDOT SHA — TMDL (Auto-detect)": { alias: true }, // UI group label
-  "TMDL — Stormwater Control Structures": {
+  // TMDL (MD SHA) - all keys included for both machine and label forms
+  mdsha_tmdl_structures: {
+    label: "TMDL — Stormwater Control Structures",
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0",
     idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID", "ASSET_ID", "STRU_ID"],
   },
-  "TMDL — Retrofits": {
+  "TMDL — Stormwater Control Structures": {
+    label: "TMDL — Stormwater Control Structures",
+    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/0",
+    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID", "ASSET_ID", "STRU_ID"],
+  },
+
+  mdsha_tmdl_retrofits: {
+    label: "TMDL — Retrofits",
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1",
     idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID", "ASSET_ID", "STRU_ID"],
   },
-  "TMDL — Tree Plantings": {
+  "TMDL — Retrofits": {
+    label: "TMDL — Retrofits",
+    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/1",
+    idFields: ["SWM_FAC_NO", "NAME", "PROJECT_ID", "ASSET_ID", "STRU_ID"],
+  },
+
+  mdsha_tmdl_tree_plantings: {
+    label: "TMDL — Tree Plantings",
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2",
     idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
   },
-  "TMDL — Pavement Removals": {
+  "TMDL — Tree Plantings": {
+    label: "TMDL — Tree Plantings",
+    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/2",
+    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
+  },
+
+  mdsha_tmdl_pavement_removals: {
+    label: "TMDL — Pavement Removals",
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3",
     idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
   },
-  "TMDL — Stream Restorations": {
+  "TMDL — Pavement Removals": {
+    label: "TMDL — Pavement Removals",
+    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/3",
+    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
+  },
+
+  mdsha_tmdl_stream_restorations: {
+    label: "TMDL — Stream Restorations",
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4",
     idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
   },
-  "TMDL — Outfall Stabilizations": {
+  "TMDL — Stream Restorations": {
+    label: "TMDL — Stream Restorations",
+    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/4",
+    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
+  },
+
+  mdsha_tmdl_outfall_stabilizations: {
+    label: "TMDL — Outfall Stabilizations",
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
     idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
   },
+  "TMDL — Outfall Stabilizations": {
+    label: "TMDL — Outfall Stabilizations",
+    base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
+    idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
+  }
 };
 
+// allow referencing by label or by key
 function resolveDatasetKey(input) {
   if (DATASETS[input] && !DATASETS[input].alias) return input;
+  // Try mapping machine keys to labels
+  const machineToLabel = {
+    mdsha_tmdl_tree_plantings: "TMDL — Tree Plantings",
+    mdsha_tmdl_structures: "TMDL — Stormwater Control Structures",
+    mdsha_tmdl_retrofits: "TMDL — Retrofits",
+    mdsha_tmdl_pavement_removals: "TMDL — Pavement Removals",
+    mdsha_tmdl_stream_restorations: "TMDL — Stream Restorations",
+    mdsha_tmdl_outfall_stabilizations: "TMDL — Outfall Stabilizations",
+    mdsha_landscape: "MDOT SHA — Managed Landscape (LOD_ID)",
+    fairfax_bmps: "Fairfax — Stormwater Facilities (FACILITY_ID)"
+  };
+  const mapped = machineToLabel[input];
+  if (mapped && DATASETS[mapped]) return mapped;
+  // match by label
   for (const [k, v] of Object.entries(DATASETS)) {
     if (!v.alias && (v.label === input)) return k;
   }
@@ -149,7 +213,7 @@ async function fetchGeoJSONFeatureWithFallback(datasetKey, assetId) {
   const def = DATASETS[datasetKey];
   if (!def) return null;
 
-  const useVariants = datasetKey.startsWith("TMDL");
+  const useVariants = datasetKey.includes("TMDL");
   const variants = useVariants ? tmdlVariants(assetId) : [assetId];
 
   for (const fld of def.idFields || []) {
@@ -263,7 +327,7 @@ export default async function handler(req, res) {
     if (!datasetKey) {
       datasetKey = assetId.endsWith("UT")
         ? "TMDL — Tree Plantings"
-        : "fairfax_bmps";
+        : "Fairfax — Stormwater Facilities (FACILITY_ID)";
     }
 
     const ds = DATASETS[datasetKey];
