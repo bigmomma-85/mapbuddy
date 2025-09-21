@@ -22,9 +22,10 @@ const DATASETS = {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/1",
     idFields: ["SWM_FAC_NO", "ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
+  // IMPORTANT: Tree Plantings layer 2 matches on STRU_ID only.
   mdsha_tmdl_tree_plantings: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/2",
-    idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
+    idFields: ["STRU_ID"]
   },
   mdsha_tmdl_pavement_removals: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/3",
@@ -68,7 +69,7 @@ function buildWhereLike(fields, value, isTmdl){
   return ors.join(" OR ");
 }
 
-// centroid helpers for GeoJSON geometry
+// centroid helpers
 function bboxCenter(coordsFlat){ let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
   for(const [x,y] of coordsFlat){ if(x<minx)minx=x; if(y<miny)miny=y; if(x>maxx)maxx=x; if(y>maxy)maxy=y; }
   return { lng:(minx+maxx)/2, lat:(miny+maxy)/2 }; }
@@ -133,7 +134,6 @@ export default async function handler(req, res){
 
     if(!feats.length){ res.status(404).json({ error: "No feature found" }); return; }
 
-    // centroid from ESRI geometry
     const g = feats[0].geometry || {};
     let geo = null;
     if (Array.isArray(g.rings))      geo = { type:"Polygon",        coordinates:g.rings };
