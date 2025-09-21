@@ -192,59 +192,32 @@ export default async function handler(req, res) {
     }
 
     // Convert via mapshaper
-    // Convert via mapshaper
-const outFmtRaw = (format || "kml").toLowerCase();
-const outFmt = outFmtRaw === "geojson" ? "geojson"
-             : (["shapefile","shp","zip","shpzip"].includes(outFmtRaw) ? "shapefile" : "kml");
+    const outFmtRaw = (format || "kml").toLowerCase();
+    const outFmt = outFmtRaw === "geojson" ? "geojson"
+                  : (["shapefile","shp","zip","shpzip"].includes(outFmtRaw) ? "shapefile" : "kml");
 
-const msApply = await getMapshaperApply();
-if (!msApply) throw new Error("Mapshaper API not available");
+    const msApply = await getMapshaperApply();
+    if (!msApply) throw new Error("Mapshaper API not available");
 
-const input = { "in.json": Buffer.from(JSON.stringify(fc)) };
+    const input = { "in.json": Buffer.from(JSON.stringify(fc)) };
+    const outName = outFmt === "kml" ? "out.kml" : (outFmt === "geojson" ? "out.geojson" : "out.zip");
+    const cmd = `-i in.json -clean -o ${outName} format=${outFmt}`;
+    const outputs = await msApply(cmd, input);
+    const buf = outputs[outName];
+    if (!buf) throw new Error(`Mapshaper produced no ${outName}`);
 
-// Give shapefile a safe short layer name + explicit UTF-8 encoding
-const safeBase = String(assetId).replace(/[^\w.-]+/g, "_").slice(0, 30) || "layer";
-
-let outName, cmd;
-if (outFmt === "kml") {
-  outName = "out.kml";
-  cmd = `-i in.json -clean -o ${outName} format=kml`;
-} else if (outFmt === "geojson") {
-  outName = "out.geojson";
-  cmd = `-i in.json -clean -o ${outName} format=geojson`;
-} else {
-  // shapefile (.zip)
-  outName = "out.zip";
-  cmd = `-i in.json name=${safeBase} -clean -o ${outName} format=shapefile encoding=utf8`;
-}
-// L220–223 REPLACEMENT
-let outputs;
-try {
-  outputs = await msApply(cmd, input);
-} catch (e) {
-  const m = String(e?.message || e);
-  console.error("mapshaper apply() error:", m);
-  res.status(500).json({ error: `Conversion failed: ${m}`, details: m });
-  return; // stop; we've already responded
-}
-const buf = outputs[outName];
-if (!buf) {
-  res.status(500).json({ error: `Conversion failed: no ${outName} produced by mapshaper` });
-  return; // stop here too
-}
-
-} catch (err) {
-  const msg = String(err?.message || err);
-  console.error("convert: mapshaper failed:", msg);
-  res.status(500).json({ error: `Conversion failed: ${msg}`, details: msg });
-}
-  res.setHeader("Content-Type", "application/geo+json");
-  res.setHeader("Content-Disposition", `attachment; filename="${safe}.geojson"`);
-} else {
-  res.setHeader("Content-Type", "application/zip");
-  res.setHeader("Content-Disposition", `attachment; filename="${safe}.zip"`);
-}
-res.status(200).send(buf);
+    const safe = String(assetId).replace(/[^\w.-]+/g, "_");
+    if (outFmt === "kml") {
+      res.setHeader("Content-Type", "application/vnd.google-earth.kml+xml");
+      res.setHeader("Content-Disposition", `attachment; filename="${safe}.kml"`);
+    } else if (outFmt === "geojson") {
+      res.setHeader("Content-Type", "application/geo+json");
+      res.setHeader("Content-Disposition", `attachment; filename="${safe}.geojson"`);
+    } else {
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${safe}.zip"`);
+    }
+    res.status(200).send(buf);
 
   } catch (err) {
     res.status(500).json({ error: "Conversion failed", details: String(err?.message || err) });
