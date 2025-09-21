@@ -6,21 +6,21 @@ export const config = { runtime: "nodejs" };
 
 // ---------- Dataset registry ----------
 const DATASETS = {
-  // Fairfax — MapServer OK
+  // Fairfax — MapServer
   fairfax_bmps: {
     base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
     idFields: ["FACILITY_ID"],
     label: "Fairfax — Stormwater Facilities",
   },
 
-  // MDOT SHA Landscape — MapServer OK
+  // MDOT SHA Landscape — MapServer
   mdsha_landscape: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/OED_Env_Assets_Mgr/OED_Environmental_Assets_WGS84_Maryland_MDOTSHA/MapServer/0",
     idFields: ["LOD_ID"],
     label: "MDOT SHA — Managed Landscape",
   },
 
-  // TMDL layers — use FeatureServer
+  // TMDL layers — FeatureServer
   mdsha_tmdl_structures: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/0",
     idFields: ["SWM_FAC_NO", "ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"],
@@ -31,9 +31,10 @@ const DATASETS = {
     idFields: ["SWM_FAC_NO", "ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"],
     label: "TMDL — Retrofits",
   },
+  // IMPORTANT: Tree Plantings layer 2 matches on STRU_ID only.
   mdsha_tmdl_tree_plantings: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/2",
-    idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"],
+    idFields: ["STRU_ID"],
     label: "TMDL — Tree Plantings",
   },
   mdsha_tmdl_pavement_removals: {
@@ -83,7 +84,6 @@ function guessDatasetFromId(id) {
   return null;
 }
 
-// Robust variants for TMDL IDs
 function tmdlVariants(assetId) {
   const s = String(assetId || "").trim().toUpperCase();
   const m = s.match(/^(\d+)\s*-?\s*([A-Z]{2})$/);
@@ -91,38 +91,30 @@ function tmdlVariants(assetId) {
     const num = m[1], suf = m[2];
     return [ `${num}${suf}`, `${num}-${suf}`, `${num} ${suf}` ];
   }
-  // fallbacks
   return [s, s.replace(/-/g,""), s.replace(/\s+/g,""), s.replace(/(\d+)([A-Za-z]+)/,'$1-$2'), s.replace(/(\d+)([A-Za-z]+)/,'$1 $2')];
 }
 
-// WHERE builders
 const esc = (v) => String(v).replace(/'/g, "''");
 
 function buildWhereExact(fields, value, useVariants) {
   const vals = useVariants ? tmdlVariants(value) : [String(value)];
   const ors = [];
-  for (const f of fields) {
-    for (const v of vals) ors.push(`UPPER(${f}) = UPPER('${esc(v)}')`);
-  }
+  for (const f of fields) for (const v of vals) ors.push(`UPPER(${f}) = UPPER('${esc(v)}')`);
   return ors.join(" OR ");
 }
-
 function buildWhereLike(fields, value, useVariants) {
   const vals = useVariants ? tmdlVariants(value) : [String(value)];
-  const likes = [];
   const patterns = new Set();
   for (const v of vals) {
     patterns.add(`%${v}%`);
-    patterns.add(`%${v.replace(/-/g, " ")}%`);
-    patterns.add(`%${v.replace(/\s+/g, "-")}%`);
+    patterns.add(`%${v.replace(/-/g," ")}%`);
+    patterns.add(`%${v.replace(/\s+/g,"-")}%`);
   }
-  for (const f of fields) {
-    for (const p of patterns) likes.push(`UPPER(${f}) LIKE UPPER('${esc(p)}')`);
-  }
-  return likes.join(" OR ");
+  const ors = [];
+  for (const f of fields) for (const p of patterns) ors.push(`UPPER(${f}) LIKE UPPER('${esc(p)}')`);
+  return ors.join(" OR ");
 }
 
-// ESRI JSON → GeoJSON
 function esriToGeoJSONFeature(f) {
   const a = f.attributes || {};
   const g = f.geometry || {};
@@ -172,8 +164,8 @@ export default async function handler(req, res) {
 
     // Pass A: exact; Pass B: LIKE
     const passes = ["exact", "like"];
-
     let fc = null, usedKey = null, usedLabel = null;
+
     for (const pass of passes) {
       for (const key of targets) {
         const ds = DATASETS[key]; if (!ds) continue;
