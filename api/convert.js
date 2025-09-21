@@ -52,7 +52,7 @@ const DATASETS = {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
     idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
     label: "TMDL — Outfall Stabilizations",
-  }
+  },
 };
 
 // Special “any TMDL” search order
@@ -73,32 +73,55 @@ async function readJson(req) {
   try { return JSON.parse(raw || "{}"); } catch { return {}; }
 }
 
+// Recognize TMDL-style IDs even with dash/space variants
+function isTmdlIdLike(s) {
+  const v = String(s || "").trim().toUpperCase();
+  return /^(\d+)\s*-?\s*(UT|TR|SR|OF|PR)$/.test(v);
+}
+
 function guessDatasetFromId(id) {
   if (!id) return null;
-  const s = id.trim().toUpperCase();
+  const s = String(id).trim().toUpperCase();
   if (/^WP\d{3,}$/.test(s)) return "fairfax_bmps";
   if (s.startsWith("LOD_")) return "mdsha_landscape";
-  if (/(UT|TR|SR|OF|PR)\s*$/.test(s)) return "mdsha_tmdl_any";
+  if (isTmdlIdLike(s)) return "mdsha_tmdl_any";
   return null;
 }
 
-function buildWhere(idFields, assetId) {
+// Generate robust variants for TMDL IDs: raw, with dash, with space
+function tmdlVariants(assetId) {
+  const s = String(assetId || "").trim().toUpperCase();
+  const m = s.match(/^(\d+)\s*-?\s*([A-Z]{2})$/);
+  if (m) {
+    const num = m[1], suf = m[2];
+    return [ `${num}${suf}`, `${num}-${suf}`, `${num} ${suf}` ];
+  }
+  // If it already has letters+digits, still try common normalizations
+  return [s, s.replace(/-/g,""), s.replace(/\s+/g,""), s.replace(/(\d+)([A-Za-z]+)/,'$1-$2'), s.replace(/(\d+)([A-Za-z]+)/,'$1 $2')];
+}
+
+// Build WHERE with optional variants (for TMDL)
+function buildWhere(idFields, assetId, useVariants) {
   const esc = (v) => `'${String(v).replace(/'/g, "''")}'`;
-  const ors = idFields.map((f) => `${f}=${esc(assetId)}`);
+  const vals = useVariants ? tmdlVariants(assetId) : [String(assetId)];
+  const ors = [];
+  for (const f of idFields) {
+    for (const val of vals) ors.push(`${f}=${esc(val)}`);
+  }
   return ors.join(" OR ");
 }
 
 async function fetchArcgisGeoJSON(base, where) {
   // try f=geojson first
   const u1 = `${base}/query?where=${encodeURIComponent(where)}&outFields=*&returnGeometry=true&outSR=4326&f=geojson`;
-  let r = await axios.get(u1, { validateStatus: () => true });
+  let r = await axios.get(u1, { validateStatus: () => true, timeout: 20000 });
   if (r.status === 200 && r.data && (r.data.type === "FeatureCollection" || r.data.type === "Feature")) {
     return r.data;
   }
 
   // fallback to f=json then convert
   const u2 = `${base}/query?where=${encodeURIComponent(where)}&outFields=*&returnGeometry=true&outSR=4326&f=json`;
-  r = await axios.get(u2, { validateStatus: () => true });
+  r = await axios.get(u2, { validateStatus: () => true, timeout: 20000 });
   if (r.status !== 200) throw new Error(`ArcGIS request failed (${r.status})`);
   if (!r.data || !Array.isArray(r.data.features)) return { type: "FeatureCollection", features: [] };
 
@@ -162,14 +185,18 @@ export default async function handler(req, res) {
 
     // Find the first layer that returns a feature
     let featureFC = null, usedKey = null, usedLabel = null;
+
     for (const key of targets) {
       const ds = DATASETS[key];
       if (!ds) continue;
-      const where = buildWhere(ds.idFields, assetId);
+
+      // Use robust variants only for TMDL layers
+      const useVariants = key.startsWith("mdsha_tmdl_");
+      const where = buildWhere(ds.idFields, assetId, useVariants);
+
       const fc = wrapSingleFeature(await fetchArcgisGeoJSON(ds.base, where));
       if (fc.features.length) {
         usedKey = key; usedLabel = ds.label;
-        // enrich properties with asset/dataset info
         const feat = fc.features[0];
         feat.properties = { ...feat.properties, _assetId: assetId, _dataset: key, _sourceLabel: ds.label };
         featureFC = { type: "FeatureCollection", features: [feat] };
