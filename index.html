@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>MapBuddy — Asset to Map Files</title>
+  <title>MapBuddy — Asset to KML Files</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { theme:{ extend:{ colors:{ 'map-blue':'#2563eb','map-green':'#059669','map-orange':'#ea580c' } } } }
+    tailwind.config = { theme:{ extend:{ colors:{ 'map-blue':'#2563eb','map-green':'#059669' } } } }
   </script>
   <style>
     :root { --line:#E5E7EB; --primary:#2563eb; }
@@ -38,9 +38,9 @@
   <section class="py-10 px-4 sm:px-6 lg:px-8">
     <div class="max-w-4xl mx-auto text-center">
       <h2 class="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
-        Convert Assets to <span class="text-transparent bg-clip-text bg-gradient-to-r from-map-blue to-map-green">Map Files</span>
+        Convert Assets to <span class="text-transparent bg-clip-text bg-gradient-to-r from-map-blue to-map-green">KML Map Files</span>
       </h2>
-      <p class="text-lg text-gray-600">Transform asset numbers into KML, GeoJSON, and Shapefile. Single asset or bulk processing available.</p>
+      <p class="text-lg text-gray-600">Transform asset numbers into KML files with Google Maps links. Single asset or bulk processing available.</p>
     </div>
   </section>
 
@@ -61,7 +61,6 @@
             <label class="block text-sm font-semibold mb-2">Dataset</label>
             <select id="singleDataset" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-map-blue">
               <option value="">Select Dataset</option>
-              <!-- Use BACKEND KEYS -->
               <option value="fairfax_bmps">Fairfax — Stormwater Facilities (FACILITY_ID)</option>
               <option value="mdsha_tmdl_structures">TMDL — Stormwater Control Structures (MD SHA)</option>
               <option value="mdsha_tmdl_retrofits">TMDL — Retrofits (MD SHA)</option>
@@ -79,26 +78,8 @@
             <p id="singleHint" class="text-xs text-gray-500 mt-1"></p>
           </div>
 
-          <div>
-            <label class="block text-sm font-semibold mb-2">Output Format</label>
-            <div class="grid sm:grid-cols-2 gap-3">
-              <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-blue">
-                <input id="fmtKmlSingle" type="checkbox" class="mr-3" checked/>
-                <span class="text-sm font-medium">🗺️ KML</span>
-              </label>
-              <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-green">
-                <input id="fmtGeoSingle" type="checkbox" class="mr-3"/>
-                <span class="text-sm font-medium">📊 GeoJSON</span>
-              </label>
-              <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:border-map-orange">
-                <input id="fmtShpSingle" type="checkbox" class="mr-3"/>
-                <span class="text-sm font-medium">🗃️ Shapefile (.zip)</span>
-              </label>
-            </div>
-          </div>
-
           <div class="text-center">
-            <button id="singleRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Generate Map Files</button>
+            <button id="singleRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Generate KML & Google Maps Link</button>
           </div>
 
           <div id="gmWrap" class="hidden mt-6 p-4 rounded-xl border border-blue-200 bg-blue-50 flex items-center justify-between">
@@ -154,30 +135,10 @@
               </ul>
             </div>
           </div>
-
-          <div class="space-y-6">
-            <div>
-              <label class="block text-sm font-semibold mb-2">Output Formats</label>
-              <div class="space-y-3">
-                <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-blue">
-                  <input id="fmtKmlBulk" type="checkbox" class="mr-4"/>
-                  <div><div class="font-medium">KML (zip)</div><div class="text-sm text-gray-500">Google Earth format</div></div>
-                </label>
-                <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-green">
-                  <input id="fmtGeoBulk" type="checkbox" class="mr-4"/>
-                  <div><div class="font-medium">GeoJSON (zip)</div><div class="text-sm text-gray-500">Web mapping format</div></div>
-                </label>
-                <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:border-map-orange">
-                  <input id="fmtShpBulk" type="checkbox" class="mr-4"/>
-                  <div><div class="font-medium">Shapefile (zip)</div><div class="text-sm text-gray-500">GIS standard format</div></div>
-                </label>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div class="text-center mt-8">
-          <button id="bulkRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Process Bulk Conversion</button>
+          <button id="bulkRunBtn" class="pill btn-grad text-white px-8 py-4 font-semibold text-lg disabled:opacity-50">Process Bulk KML</button>
         </div>
       </div>
     </div>
@@ -188,14 +149,11 @@
   </footer>
 
   <script>
-    console.log("MapBuddy build 2025-09-20 — locate-soft404 + convert-fallbacks + shapefile-single-candidate-only");
-
     const $ = (id) => document.getElementById(id);
     const API_CONVERT = "/api/convert";
     const API_BULK    = "/api/bulk";
     const API_LOCATE  = "/api/locate";
 
-    // Toggle
     function setMode(mode){
       const single = mode === "single";
       $("singleMode").classList.toggle("hidden", !single);
@@ -210,16 +168,14 @@
     $("bulkModeBtn").onclick=()=>setMode("bulk");
     setMode(localStorage.getItem("mb_mode")||"single");
 
-    // Hints / enable
     function refreshHints(){
       const ds=$("singleDataset").value;
       $("singleHint").textContent = ds==="fairfax_bmps"
         ? "Fairfax: Use FACILITY_ID (e.g., WP0399)."
         : "MD SHA: Use the official ID exactly (e.g., 210049UT).";
     }
-    function anySingleFmt(){ return $("fmtKmlSingle").checked || $("fmtGeoSingle").checked || $("fmtShpSingle").checked; }
-    function enableSingle(){ $("singleRunBtn").disabled = !($("singleDataset").value && ($("singleAsset").value||"").trim() && anySingleFmt()); }
-    ["singleDataset","singleAsset","fmtKmlSingle","fmtGeoSingle","fmtShpSingle"].forEach(id=>{
+    function enableSingle(){ $("singleRunBtn").disabled = !($("singleDataset").value && ($("singleAsset").value||"").trim()); }
+    ["singleDataset","singleAsset"].forEach(id=>{
       $(id).addEventListener("input", ()=>{refreshHints(); enableSingle();});
       $(id).addEventListener("change", ()=>{refreshHints(); enableSingle();});
     });
@@ -256,14 +212,6 @@
         return { lat: sy/flat.length, lon: sx/flat.length };
       }catch{return null;}
     }
-    function parseGeoJSONForLatLng(txt){
-      try{ const gj=JSON.parse(txt);
-        const feat=(gj.type==="Feature")?gj:(gj.features&&gj.features[0]); if(!feat) return null;
-        const g=(feat.type==="Feature")?feat.geometry:feat; if(!g) return null;
-        if(g.type==="Point"){ const [lon,lat]=g.coordinates; return {lat,lon}; }
-        return centroidOfCoords(g.coordinates);
-      }catch{return null;}
-    }
     function parseKMLForLatLng(txt){
       try{ const m=txt.match(/<coordinates>\s*([-\d.]+),([-\d.]+)/i);
         if(m){ const lon=parseFloat(m[1]), lat=parseFloat(m[2]); if(isFinite(lat)&&isFinite(lon)) return {lat,lon}; }
@@ -277,7 +225,6 @@
       $("gmWrap").classList.remove("hidden");
     }
 
-    // ---- helpers for convert with diagnostics
     async function convertOnce(assetId, dataset, fmt){
       const body = dataset ? { assetId, dataset, format: fmt } : { assetId, format: fmt };
       const res = await fetch(API_CONVERT, {
@@ -297,14 +244,12 @@
       return res;
     }
 
-    // ===== Single: locate (soft-404) → convert with fallbacks =====
     async function runSingle(){
       const btn=$("singleRunBtn");
-      let dataset=$("singleDataset").value;      // backend keys
+      let dataset=$("singleDataset").value;
       let assetId=($("singleAsset").value||"").trim();
-
-      const formats=[]; if($("fmtKmlSingle").checked) formats.push("kml"); if($("fmtGeoSingle").checked) formats.push("geojson"); if($("fmtShpSingle").checked) formats.push("shpzip");
-      if(!dataset||!assetId||!formats.length) return;
+      const fmt = "kml";
+      if(!dataset||!assetId) return;
 
       btn.disabled=true; btn.textContent="Locating…"; $("gmWrap").classList.add("hidden");
 
@@ -327,95 +272,78 @@
           if(String(msg).toLowerCase().includes("no feature")){
             console.warn("Locate 404 (no feature) — continuing to convert fallbacks");
           }else{
-            // true failure (e.g., bad dataset key) — still proceed to convert fallbacks
             console.warn("Locate failed:", msg);
           }
         }
 
-        // 2) CONVERT with fallbacks
         btn.textContent = "Converting…";
-        let haveCoords = hadLocateFeature;
 
-        for(const fmt of formats){
-          let res = null, lastErr = null;
-
-          let candidates;
-          if (fmt === "shpzip") {
-            candidates = [dataset]; // Only try the selected dataset for SHP!
-          } else {
-            candidates = [dataset, "mdsha_tmdl_any", null].filter((v, i, a) => a.indexOf(v) === i);
+        // For KML, try selected, fallback to mdsha_tmdl_any, then null (let backend guess)
+        const candidates = [dataset, "mdsha_tmdl_any", null].filter((v, i, a) => a.indexOf(v) === i);
+        let res=null, lastErr=null;
+        for(const ds of candidates){
+          try{
+            res = await convertOnce(assetId, ds, fmt);
+            break;
+          }catch(e){
+            lastErr = e;
+            continue;
           }
+        }
+        if(!res) throw lastErr;
 
-          for(const ds of candidates){
-            try{
-              res = await convertOnce(assetId, ds, fmt);
-              break;
-            }catch(e){
-              lastErr = e;
-              continue;
-            }
-          }
-          if(!res) throw lastErr;
+        const clone = res.clone();
+        const blob  = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `mapbuddy_${assetId}.kml`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(a.href);
 
-          const clone = res.clone();
-          const blob  = await res.blob();
-          const ext   = fmt==="shpzip" ? "zip" : fmt;
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = `mapbuddy_${assetId}.${ext}`;
-          document.body.appendChild(a); a.click(); a.remove();
-          URL.revokeObjectURL(a.href);
-
-          if(!haveCoords && (fmt==="kml" || fmt==="geojson")){
-            const txt = await clone.text();
-            const pt  = fmt==="geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
-            if(pt){
-              const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId+" "+(dataset||""))})`;
-              showGmapsLink(gm);
-              haveCoords = true;
-            }
+        // Parse KML and show Google Maps link if not already shown
+        if(!hadLocateFeature){
+          const txt = await clone.text();
+          const pt  = parseKMLForLatLng(txt);
+          if(pt){
+            const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId+" "+(dataset||""))})`;
+            showGmapsLink(gm);
           }
         }
 
       }catch(err){
         alert(`Single conversion failed. Please retry.\n\nLast error:\n${err.message}${err.payload ? `\nPayload: ${JSON.stringify(err.payload)}` : ""}`);
       }finally{
-        // ALWAYS reset button state
-        btn.textContent = "Generate Map Files";
+        btn.textContent = "Generate KML & Google Maps Link";
         btn.disabled = false;
       }
     }
     $("singleRunBtn").addEventListener("click", runSingle);
 
-    // ===== Bulk (unchanged) =====
     async function runBulk(){
       const dataset=$("bulkDataset").value;
-      const wantKml=$("fmtKmlBulk").checked, wantGeo=$("fmtGeoBulk").checked, wantShp=$("fmtShpBulk").checked;
       if(!dataset) return alert("Choose a dataset.");
       if(!bulkItems.length) return alert("Upload a CSV first.");
-      if(!wantKml && !wantGeo && !wantShp) return alert("Choose at least one output format.");
 
       const btn=$("bulkRunBtn");
       btn.disabled=true; btn.textContent="Processing Assets…";
       try{
-        const todo=[]; if(wantKml) todo.push("kmlzip"); if(wantGeo) todo.push("geojsonzip"); if(wantShp) todo.push("shpzip");
-        for(const fmt of todo){
-          const payload={ items: bulkItems, defaultDataset: dataset, format: fmt };
-          const res=await fetch(API_BULK,{ method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
-          if(!res.ok){
-            let d=""; try{ d=await res.json(); }catch{}
-            const dStr=typeof d==="object"?JSON.stringify(d):(d||"");
-            throw new Error(`/api/bulk → ${res.status} ${dStr}\nPayload: ${JSON.stringify(payload).slice(0,2000)}`);
-          }
-          const blob=await res.blob();
-          const filename=res.headers.get("x-filename")||`mapbuddy_${dataset}_${fmt}.zip`;
-          const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename;
-          document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+        // Only generate KML zip
+        const fmt = "kmlzip";
+        const payload={ items: bulkItems, defaultDataset: dataset, format: fmt };
+        const res=await fetch(API_BULK,{ method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+        if(!res.ok){
+          let d=""; try{ d=await res.json(); }catch{}
+          const dStr=typeof d==="object"?JSON.stringify(d):(d||"");
+          throw new Error(`/api/bulk → ${res.status} ${dStr}\nPayload: ${JSON.stringify(payload).slice(0,2000)}`);
         }
+        const blob=await res.blob();
+        const filename=res.headers.get("x-filename")||`mapbuddy_${dataset}_kmlzip.zip`;
+        const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename;
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
       }catch(err){
         alert(`Bulk conversion failed. Please retry.\n\nLast error:\n${err.message}`);
       }finally{
-        btn.textContent="Process Bulk Conversion";
+        btn.textContent="Process Bulk KML";
         btn.disabled=false;
       }
     }
