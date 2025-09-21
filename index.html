@@ -303,7 +303,7 @@
       let dataset=$("singleDataset").value;      // backend keys
       let assetId=($("singleAsset").value||"").trim();
 
-      const formats=[]; if($("fmtKmlSingle").checked) formats.push("kml"); if($("fmtGeoSingle").checked) formats.push("geojson"); if($("fmtShpSingle").checked) formats.push("shpzip");
+      const formats=[]; if($("fmtKmlSingle").checked) formats.push("kml"); if($("fmtGeoSingle").checked) formats.push("geojson"); if($("fmtShpSingle").checked) formats.push("shapefile");
       if(!dataset||!assetId||!formats.length) return;
 
       btn.disabled=true; btn.textContent="Locating…"; $("gmWrap").classList.add("hidden");
@@ -362,7 +362,7 @@
 
           const clone = res.clone();
           const blob  = await res.blob();
-          const ext   = fmt==="shpzip" ? "zip" : fmt;
+          const ext   = fmt==="shapefile" ? "zip" : fmt;
           const a = document.createElement("a");
           a.href = URL.createObjectURL(blob);
           a.download = `mapbuddy_${assetId}.${ext}`;
