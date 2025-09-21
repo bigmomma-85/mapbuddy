@@ -6,9 +6,7 @@
   <title>MapBuddy — Asset to Map Files</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { theme: { extend: {
-      colors: { 'map-blue':'#2563eb', 'map-green':'#059669', 'map-orange':'#ea580c' }
-    } } }
+    tailwind.config = { theme:{ extend:{ colors:{ 'map-blue':'#2563eb','map-green':'#059669','map-orange':'#ea580c' } } } }
   </script>
   <style>
     :root { --line:#E5E7EB; --primary:#2563eb; }
@@ -55,6 +53,7 @@
         </div>
       </div>
 
+      <!-- SINGLE -->
       <div id="singleMode" class="bg-white rounded-2xl p-8 card mb-10">
         <h3 class="text-2xl font-bold text-center mb-8">Single Asset Conversion</h3>
         <div class="max-w-3xl mx-auto space-y-6">
@@ -116,6 +115,7 @@
         </div>
       </div>
 
+      <!-- BULK -->
       <div id="bulkMode" class="bg-white rounded-2xl p-8 card hidden">
         <h3 class="text-2xl font-bold text-center mb-8">Bulk Asset Conversion</h3>
 
@@ -187,17 +187,16 @@
   </footer>
 
   <script>
-    // ===== Build stamp =====
-    console.log("MapBuddy build 2025-09-20—single-locate-dataset-adaptive");
+    console.log("MapBuddy build 2025-09-20—backend-keys-aligned");
 
-    // ===== Tiny helpers =====
+    // ===== Helpers =====
     const $ = (id) => document.getElementById(id);
     const API_CONVERT = "/api/convert";
     const API_BULK    = "/api/bulk";
     const API_LOCATE  = "/api/locate";
 
     // Toggle
-    function setMode(mode) {
+    function setMode(mode){
       const single = mode === "single";
       $("singleMode").classList.toggle("hidden", !single);
       $("bulkMode").classList.toggle("hidden", single);
@@ -207,21 +206,19 @@
       $("bulkModeBtn").classList.toggle("tab-idle", single);
       localStorage.setItem("mb_mode", mode);
     }
-    $("singleModeBtn").onclick = () => setMode("single");
-    $("bulkModeBtn").onclick   = () => setMode("bulk");
-    setMode(localStorage.getItem("mb_mode") || "single");
+    $("singleModeBtn").onclick=()=>setMode("single");
+    $("bulkModeBtn").onclick=()=>setMode("bulk");
+    setMode(localStorage.getItem("mb_mode")||"single");
 
     // Hints / enable
-    function refreshHints() {
-      const ds = $("singleDataset").value;
-      $("singleHint").textContent = ds === "fairfax_bmps"
+    function refreshHints(){
+      const ds=$("singleDataset").value;
+      $("singleHint").textContent = ds==="fairfax_bmps"
         ? "Fairfax: Use FACILITY_ID (e.g., WP0399)."
-        : "MD SHA TMDL/LOD: Use the official ID exactly (e.g., 210049UT).";
+        : "MD SHA: Use the official ID exactly (e.g., 210049UT).";
     }
     function anySingleFmt(){ return $("fmtKmlSingle").checked || $("fmtGeoSingle").checked || $("fmtShpSingle").checked; }
-    function enableSingle(){
-      $("singleRunBtn").disabled = !($("singleDataset").value && ($("singleAsset").value||"").trim() && anySingleFmt());
-    }
+    function enableSingle(){ $("singleRunBtn").disabled = !($("singleDataset").value && ($("singleAsset").value||"").trim() && anySingleFmt()); }
     ["singleDataset","singleAsset","fmtKmlSingle","fmtGeoSingle","fmtShpSingle"].forEach(id=>{
       $(id).addEventListener("input", ()=>{refreshHints(); enableSingle();});
       $(id).addEventListener("change", ()=>{refreshHints(); enableSingle();});
@@ -230,9 +227,7 @@
 
     // CSV (bulk)
     let bulkItems = [];
-    function parseCsvText(text){
-      return (text||"").replace(/^\uFEFF/,"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    }
+    function parseCsvText(text){ return (text||"").replace(/^\uFEFF/,"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean); }
     function attachCSV(file){
       const r=new FileReader();
       r.onload=()=>{
@@ -251,30 +246,26 @@
     $("drop").addEventListener("drop", e=>{
       e.preventDefault();
       $("drop").classList.remove("border-map-blue","bg-blue-50");
-      const f=e.dataTransfer.files?.[0];
-      if(f) attachCSV(f);
+      const f=e.dataTransfer.files?.[0]; if(f) attachCSV(f);
     });
 
-    // Geometry helpers (for fallback GM link)
+    // Geometry (fallback for GM link)
     function centroidOfCoords(coords){
-      try{
-        let flat=[];(function walk(c){ if(typeof c[0]==="number"){flat.push(c);return;} for(const x of c) walk(x); })(coords);
+      try{ let flat=[];(function walk(c){ if(typeof c[0]==="number"){flat.push(c);return;} for(const x of c) walk(x); })(coords);
         if(!flat.length) return null; let sx=0,sy=0; for(const [lon,lat] of flat){sx+=lon;sy+=lat;}
         return { lat: sy/flat.length, lon: sx/flat.length };
       }catch{return null;}
     }
     function parseGeoJSONForLatLng(txt){
-      try{
-        const gj=JSON.parse(txt);
-        const feat=(gj.type==="Feature")?gj:(gj.features&&gj.features[0]);
-        if(!feat) return null; const g=(feat.type==="Feature")?feat.geometry:feat;
-        if(!g) return null; if(g.type==="Point"){ const [lon,lat]=g.coordinates; return {lat,lon}; }
+      try{ const gj=JSON.parse(txt);
+        const feat=(gj.type==="Feature")?gj:(gj.features&&gj.features[0]); if(!feat) return null;
+        const g=(feat.type==="Feature")?feat.geometry:feat; if(!g) return null;
+        if(g.type==="Point"){ const [lon,lat]=g.coordinates; return {lat,lon}; }
         return centroidOfCoords(g.coordinates);
       }catch{return null;}
     }
     function parseKMLForLatLng(txt){
-      try{
-        const m=txt.match(/<coordinates>\s*([-\d.]+),([-\d.]+)/i);
+      try{ const m=txt.match(/<coordinates>\s*([-\d.]+),([-\d.]+)/i);
         if(m){ const lon=parseFloat(m[1]), lat=parseFloat(m[2]); if(isFinite(lat)&&isFinite(lon)) return {lat,lon}; }
         return null;
       }catch{return null;}
@@ -286,47 +277,10 @@
       $("gmWrap").classList.remove("hidden");
     }
 
-    // ===== Adaptive dataset resolution for SINGLE =====
-    const DATASET_ALIAS = {
-      "mdsha_tmdl_structures": ["tmdl_scs", "tmdl_control_structures", "scs", "sha_scs"],
-      "mdsha_tmdl_retrofits": ["tmdl_retrofits", "tmdl_retros", "retrofits"],
-      "mdsha_tmdl_tree_plantings": ["tmdl_trees", "tmdl_tree_plantings", "sha_trees", "trees", "tmdl_tree", "tmdl_trees_2024"],
-      "mdsha_tmdl_pavement_removals": ["tmdl_pavement", "tmdl_pave", "pavement"],
-      "mdsha_tmdl_stream_restorations": ["tmdl_streams", "tmdl_stream_restorations", "streams"],
-      "mdsha_tmdl_outfall_stabilizations": ["tmdl_outfalls", "tmdl_outfall_stab", "outfalls"],
-      "mdsha_landscape": ["mdsha_lod"]
-    };
-    function pickFromLocate(info, selected){
-      // prefer canonical keys the backend might return
-      return info?.convertDataset || info?.dataset || info?.layerKey || info?.layer || info?.collection || info?.table || selected;
-    }
-    function candidateDatasets(primary){
-      const list = [primary, ...(DATASET_ALIAS[primary]||[])];
-      // remove dupes and falsy
-      return Array.from(new Set(list.filter(Boolean)));
-    }
-
-    async function tryConvert(assetId, datasetOrNull, fmt){
-      const body = datasetOrNull ? { assetId, dataset: datasetOrNull, format: fmt }
-                                   : { assetId, format: fmt }; // last-resort: no dataset
-      const res = await fetch(API_CONVERT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        let d = ""; try { d = await res.json(); } catch {}
-        const dStr = typeof d === "object" ? JSON.stringify(d) : (d || "");
-        const err = new Error(`/api/convert → ${res.status} ${dStr}\nPayload: ${JSON.stringify(body)}`);
-        err._detail = dStr;
-        throw err;
-      }
-      return res;
-    }
-
+    // Single: locate → convert (NO defaultDataset here)
     async function runSingle(){
       const btn=$("singleRunBtn");
-      let dataset=$("singleDataset").value;
+      let dataset=$("singleDataset").value;         // now matches backend keys
       let assetId=($("singleAsset").value||"").trim();
 
       const formats=[];
@@ -335,12 +289,10 @@
       if($("fmtShpSingle").checked) formats.push("shpzip");
       if(!dataset||!assetId||!formats.length) return;
 
-      btn.disabled=true;
-      btn.textContent="Locating…";
-      $("gmWrap").classList.add("hidden");
+      btn.disabled=true; btn.textContent="Locating…"; $("gmWrap").classList.add("hidden");
 
       try{
-        // 1) Locate first (critical for TMDL)
+        // 1) LOCATE
         const loc = await fetch(API_LOCATE, {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
@@ -352,55 +304,36 @@
           throw new Error(msg);
         }
         const info = await loc.json();
-        if(info?.assetId) assetId = info.assetId;
-        // Learn canonical dataset key (if provided)
-        let primaryDataset = pickFromLocate(info, dataset);
+        if(info?.assetId) assetId = info.assetId;   // canonicalize if backend returns it
+        if(info?.googleMapsUrl) showGmapsLink(info.googleMapsUrl);
 
-        if(info?.googleMapsUrl){ showGmapsLink(info.googleMapsUrl); }
-
-        // 2) Convert with adaptive dataset fallbacks
+        // 2) CONVERT (no defaultDataset)
         btn.textContent="Converting…";
         let haveCoords = !!info?.googleMapsUrl;
 
         for(const fmt of formats){
-          let res=null, lastErr=null;
-
-          // Try primary + aliases; then (as last resort) no dataset
-          const tries = [...candidateDatasets(primaryDataset), null];
-
-          for(const dsTry of tries){
-            try {
-              res = await tryConvert(assetId, dsTry, fmt);
-              primaryDataset = dsTry || primaryDataset; // remember success
-              break;
-            } catch(e) {
-              // Detect "Unknown dataset" and continue to next candidate
-              if(String(e._detail||"").toLowerCase().includes("unknown dataset")){
-                lastErr = e; continue;
-              }
-              // Other errors (e.g., 404 no feature) — keep the last and continue
-              lastErr = e; continue;
-            }
+          const body = { assetId, dataset, format: fmt };
+          const res = await fetch(API_CONVERT, {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify(body)
+          });
+          if(!res.ok){
+            let d=""; try{ d=await res.json(); }catch{}
+            const dStr=typeof d==="object"?JSON.stringify(d):(d||"");
+            throw new Error(`/api/convert → ${res.status} ${dStr}\nPayload: ${JSON.stringify(body)}`);
           }
-          if(!res) throw lastErr;
 
-          const clone = res.clone();
-          const blob = await res.blob();
+          const clone=res.clone();
+          const blob=await res.blob();
           const ext = fmt==="shpzip" ? "zip" : fmt;
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = `mapbuddy_${assetId}.${ext}`;
-          document.body.appendChild(a); a.click(); a.remove();
-          URL.revokeObjectURL(a.href);
+          const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`mapbuddy_${assetId}.${ext}`;
+          document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
 
-          if(!haveCoords && (fmt==="kml" || fmt==="geojson")){
-            const txt = await clone.text();
-            const pt = fmt==="geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
-            if(pt){
-              const gm = `https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId + " " + (primaryDataset||""))})`;
-              showGmapsLink(gm);
-              haveCoords=true;
-            }
+          if(!haveCoords && (fmt==="kml"||fmt==="geojson")){
+            const txt=await clone.text();
+            const pt= fmt==="geojson" ? parseGeoJSONForLatLng(txt) : parseKMLForLatLng(txt);
+            if(pt){ const gm=`https://www.google.com/maps?q=${encodeURIComponent(pt.lat)},${encodeURIComponent(pt.lon)}(${encodeURIComponent(assetId+" "+dataset)})`; showGmapsLink(gm); haveCoords=true; }
           }
         }
 
@@ -413,7 +346,7 @@
     }
     $("singleRunBtn").addEventListener("click", runSingle);
 
-    // ===== Bulk (unchanged) =====
+    // Bulk (unchanged; uses defaultDataset which must be backend key)
     async function runBulk(){
       const dataset=$("bulkDataset").value;
       const wantKml=$("fmtKmlBulk").checked, wantGeo=$("fmtGeoBulk").checked, wantShp=$("fmtShpBulk").checked;
@@ -435,8 +368,7 @@
           }
           const blob=await res.blob();
           const filename=res.headers.get("x-filename")||`mapbuddy_${dataset}_${fmt}.zip`;
-          const a=document.createElement("a");
-          a.href=URL.createObjectURL(blob); a.download=filename;
+          const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename;
           document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
         }
       }catch(err){
@@ -447,7 +379,6 @@
       }
     }
     $("bulkRunBtn").addEventListener("click", runBulk);
-
   </script>
 </body>
 </html>
