@@ -188,7 +188,7 @@
   </footer>
 
   <script>
-    console.log("MapBuddy build 2025-09-20 — locate-soft404 + convert-fallbacks");
+    console.log("MapBuddy build 2025-09-20 — locate-soft404 + convert-fallbacks + shapefile-single-candidate-only");
 
     const $ = (id) => document.getElementById(id);
     const API_CONVERT = "/api/convert";
@@ -337,24 +337,21 @@
         let haveCoords = hadLocateFeature;
 
         for(const fmt of formats){
-          let res=null, lastErr=null;
+          let res = null, lastErr = null;
 
-          // Try in this order:
-          // A) as selected
-          // B) mdsha_tmdl_any (search all TMDL layers)
-          // C) no dataset (let backend guess via assetId) — ONLY for non-shapefile formats
-          const candidates = [dataset, "mdsha_tmdl_any"];
-          if (fmt !== "shpzip") candidates.push(null);
+          let candidates;
+          if (fmt === "shpzip") {
+            candidates = [dataset]; // Only try the selected dataset for SHP!
+          } else {
+            candidates = [dataset, "mdsha_tmdl_any", null].filter((v, i, a) => a.indexOf(v) === i);
+          }
 
           for(const ds of candidates){
             try{
               res = await convertOnce(assetId, ds, fmt);
-              // success
               break;
             }catch(e){
               lastErr = e;
-              // on unknown dataset, keep trying others
-              // on no feature, keep trying others
               continue;
             }
           }
