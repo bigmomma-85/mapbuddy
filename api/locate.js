@@ -6,7 +6,7 @@ import axios from "axios";
 // Node (not Edge)
 export const config = { runtime: "nodejs" };
 
-// ---------- dataset registry (in sync with convert/bulk) ----------
+// ---------- dataset registry (in sync with convert) ----------
 const DATASETS = {
   fairfax_bmps: {
     base: "https://www.fairfaxcounty.gov/mercator/rest/services/DPWES/StwFieldMap/MapServer/7",
@@ -43,7 +43,26 @@ const DATASETS = {
 };
 
 function esc(s) { return String(s).replace(/'/g, "''"); }
-function whereFrom(fields, id) { const v = esc(id); return fields.map(f => `${f}='${v}'`).join(" OR "); }
+
+// ---- TMDL variant helpers ----
+function isTmdlLayerKey(k){ return typeof k === "string" && k.startsWith("mdsha_tmdl_"); }
+function tmdlVariants(assetId){
+  const s = String(assetId || "").trim().toUpperCase();
+  const m = s.match(/^(\d+)\s*-?\s*([A-Z]{2})$/);
+  if (m) {
+    const num = m[1], suf = m[2];
+    return [ `${num}${suf}`, `${num}-${suf}`, `${num} ${suf}` ];
+  }
+  return [s, s.replace(/-/g,""), s.replace(/\s+/g,""), s.replace(/(\d+)([A-Za-z]+)/,'$1-$2'), s.replace(/(\d+)([A-Za-z]+)/,'$1 $2')];
+}
+function whereFrom(fields, id, useVariants){
+  const vals = useVariants ? tmdlVariants(id) : [String(id)];
+  const ors = [];
+  for(const f of fields){
+    for(const v of vals) ors.push(`${f}='${esc(v)}'`);
+  }
+  return ors.join(" OR ");
+}
 
 async function readJson(req) {
   const chunks = [];
@@ -59,16 +78,13 @@ function bboxCenter(coordsFlat) {
   return { lng:(minx+maxx)/2, lat:(miny+maxy)/2 };
 }
 function flattenCoords(g){
-  const out=[];
-  const walk=(c)=>{ if (typeof c[0]==="number") out.push(c); else c.forEach(walk); };
+  const out=[]; const walk=(c)=>{ if (typeof c[0]==="number") out.push(c); else c.forEach(walk); };
   walk(g.coordinates); return out;
 }
 function centroidPolygon(rings){
-  const ring = rings[0]; // outer ring
-  let a=0, cx=0, cy=0;
+  const ring = rings[0]; let a=0, cx=0, cy=0;
   for (let i=0, j=ring.length-1; i<ring.length; j=i++){
-    const [x0,y0]=ring[j], [x1,y1]=ring[i];
-    const f = x0*y1 - x1*y0;
+    const [x0,y0]=ring[j], [x1,y1]=ring[i]; const f = x0*y1 - x1*y0;
     a += f; cx += (x0+x1)*f; cy += (y0+y1)*f;
   }
   if (a === 0) return bboxCenter(ring);
@@ -84,19 +100,13 @@ function centroid(geom){
     let sx=0, sy=0; for (const [x,y] of flat){ sx+=x; sy+=y; }
     return { lng: sx/flat.length, lat: sy/flat.length };
   }
-  if (t === "MultiLineString") {
-    return bboxCenter(flattenCoords(geom));
-  }
-  if (t === "Polygon")     return centroidPolygon(geom.coordinates);
+  if (t === "MultiLineString") { return bboxCenter(flattenCoords(geom)); }
+  if (t === "Polygon")         return centroidPolygon(geom.coordinates);
   if (t === "MultiPolygon"){
-    // choose largest ring by area
     let best = null, bestAbsArea = -1;
     for (const poly of geom.coordinates){
       const ring = poly[0];
-      let a=0;
-      for (let i=0,j=ring.length-1;i<ring.length;j=i++){
-        const [x0,y0]=ring[j],[x1,y1]=ring[i]; a += x0*y1 - x1*y0;
-      }
+      let a=0; for (let i=0,j=ring.length-1;i<ring.length;j=i++){ const [x0,y0]=ring[j],[x1,y1]=ring[i]; a += x0*y1 - x1*y0; }
       const abs = Math.abs(a);
       if (abs > bestAbsArea){ bestAbsArea = abs; best = centroidPolygon(poly); }
     }
@@ -118,12 +128,13 @@ export default async function handler(req, res) {
 
     const url = `${ds.base}/query`;
     const params = {
-      where: whereFrom(ds.idFields, assetId),
+      where: whereFrom(ds.idFields, assetId, isTmdlLayerKey(dataset)),
       outFields: "*",
       returnGeometry: true,
       outSR: 4326,
       f: "geojson"
     };
+
     const { data } = await axios.get(url, { params, timeout: 20000 });
 
     if (!data || !data.features || !data.features.length){
@@ -143,6 +154,7 @@ export default async function handler(req, res) {
       googleMapsUrl,
       properties: feat.properties || {}
     });
+
   } catch (err) {
     res.status(500).json({ error: err?.message || String(err) });
   }
