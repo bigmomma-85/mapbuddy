@@ -38,6 +38,12 @@ const DATASETS = {
   mdsha_tmdl_outfall_stabilizations: {
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/FeatureServer/5",
     idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
+  },
+
+  // --- NEW: Leesburg, VA — BMPs (ArcGIS Online, layer 51)
+  leesburg_bmps: {
+    base: "https://services1.arcgis.com/7owdfh5mgjEgbCSM/arcgis/rest/services/LEESBURG/FeatureServer/51",
+    idFields: ["OBJECTID", "OBJECTID_1", "GlobalID"]
   }
 };
 
