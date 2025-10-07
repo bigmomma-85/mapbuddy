@@ -171,7 +171,23 @@ const DATASETS = {
     label: "TMDL — Outfall Stabilizations",
     base: "https://maps.roads.maryland.gov/arcgis/rest/services/BayRestoration/TMDLBayRestorationViewer_Maryland_MDOTSHA/MapServer/5",
     idFields: ["STRU_ID", "NAME", "PROJECT_ID", "ASSET_ID"],
+  },
+
+  // -------------------------
+  // Leesburg, VA — BMPs (ArcGIS Online)
+  // Layer 51 under the LEESBURG FeatureServer
+  // Accept OBJECTID first, but also try OBJECTID_1 and GlobalID just in case.
+  leesburg_bmps: {
+    label: "Leesburg — BMPs (OBJECTID)",
+    base: "https://services1.arcgis.com/7owdfh5mgjEgbCSM/arcgis/rest/services/LEESBURG/FeatureServer/51",
+    idFields: ["OBJECTID", "OBJECTID_1", "GlobalID"],
+  },
+  "Leesburg — BMPs (OBJECTID)": {
+    label: "Leesburg — BMPs (OBJECTID)",
+    base: "https://services1.arcgis.com/7owdfh5mgjEgbCSM/arcgis/rest/services/LEESBURG/FeatureServer/51",
+    idFields: ["OBJECTID", "OBJECTID_1", "GlobalID"],
   }
+  // -------------------------
 };
 
 // allow referencing by label or by key
@@ -186,7 +202,8 @@ function resolveDatasetKey(input) {
     mdsha_tmdl_stream_restorations: "TMDL — Stream Restorations",
     mdsha_tmdl_outfall_stabilizations: "TMDL — Outfall Stabilizations",
     mdsha_landscape: "MDOT SHA — Managed Landscape (LOD_ID)",
-    fairfax_bmps: "Fairfax — Stormwater Facilities (FACILITY_ID)"
+    fairfax_bmps: "Fairfax — Stormwater Facilities (FACILITY_ID)",
+    leesburg_bmps: "Leesburg — BMPs (OBJECTID)"
   };
   const mapped = machineToLabel[input];
   if (mapped && DATASETS[mapped]) return mapped;
@@ -365,7 +382,7 @@ export default async function handler(req, res) {
         zip.addFile(`${base}.geojson`, Buffer.from(JSON.stringify(feature)));
       } else if (format === "shpzip") {
         const parts = await featureToShapefileParts(feature, base);
-        for (const [name, buf] of parts) zip.addFile(name, buf);
+        for (const [name, buf] of parts] zip.addFile(name, buf);
       } else if (format === "kml" || format === "geojson") {
         // merged single file (non-zip) — not supported in bulk
       } else {
