@@ -40,32 +40,42 @@ const DATASETS = {
     idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
 
-  // ---------- MONTGOMERY COUNTY (unified) ----------
-  montgomery_swfac: {
-    base: "https://depgis.montgomerycountymd.gov/arcgis/rest/services/DEP_Public/DEP_Stormwater/MapServer/2",
-    idFields: ["ASSET", "SEQNO", "PROP_NAME"]
-  },
-  montgomery_trees: {
-    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/DOT/MCDOT_Tree_Inventory_FY22/MapServer/0",
-    idFields: ["TREE_ID", "TREE_NUMBER", "TREEID", "TREENUMBER", "OBJECTID"]
-  },
-  montgomery_buildings: {
-    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/BLDG_PS/MapServer/0",
-    idFields: ["OBJECTID", "SITE_NAME", "ADDR"]
-  },
-  montgomery_communities: {
-    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/communities_w_muni/MapServer/0",
-    idFields: ["NAME"]
+  // ✅ Unified Montgomery County (same as convert, includes address-friendly fields)
+  montgomery_county: {
+    layers: [
+      {
+        base: "https://depgis.montgomerycountymd.gov/arcgis/rest/services/DEP_Public/DEP_Stormwater/MapServer/2",
+        idFields: ["ASSET", "SEQNO", "PROP_NAME", "P_ST_ADD", "Acct", "P_ACCT", "GRID", "INSP_REG", "Type_Desc"],
+        type: "point",
+        label: "Montgomery — DEP Stormwater Facilities (points)"
+      },
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/BLDG_PS/MapServer/0",
+        idFields: ["NAME", "ALIAS_NAME", "AGENCYNAME", "ADDRESS", "FULLADDR"],
+        type: "polygon",
+        label: "Montgomery — County Buildings"
+      },
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/communities_w_muni/MapServer/0",
+        idFields: ["NAME", "COMMUNITY", "MUNICIPALITY", "MUNI_NAME"],
+        type: "polygon",
+        label: "Montgomery — Communities & Municipalities"
+      },
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/municipalities/MapServer/0",
+        idFields: ["NAME", "MUNI_NAME"],
+        type: "polygon",
+        label: "Montgomery — Municipalities"
+      },
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/DOT/MCDOT_Tree_Inventory_FY22/MapServer/0",
+        idFields: ["TREE_ID", "SITE_NAME", "STREETNAME", "ADDRNUM", "FULLADDR", "COMMUNITY"],
+        type: "point",
+        label: "Montgomery — Tree Inventory (FY22)"
+      }
+    ]
   }
 };
-
-// unified Montgomery list
-const MONTGOMERY_ANY = [
-  "montgomery_swfac",
-  "montgomery_trees",
-  "montgomery_buildings",
-  "montgomery_communities",
-];
 
 const esc = (v) => String(v).replace(/'/g, "''");
 
@@ -122,26 +132,85 @@ async function readJson(req){
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch { return {}; }
 }
 
+async function arcQueryJson(base, params){
+  const url = `${base}/query`;
+  const r = await axios.get(url, { params, timeout: 20000, validateStatus: () => true });
+  if (r.status !== 200) throw new Error(`ArcGIS request failed (${r.status})`);
+  const feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+  return feats;
+}
+
+function looksLikeAddress(s){
+  const t = String(s || "").trim();
+  return /\d+\s+\S+/.test(t);
+}
+
+// ✅ Montgomery County geocoder fallback
+async function geocodeMontgomery(singleLine){
+  const url = "https://gis.montgomerycountymd.gov/geocoding/rest/services/Locators/CompositeLocator/GeocodeServer/findAddressCandidates";
+  const params = { SingleLine: singleLine, outSR: 4326, f: "pjson", maxLocations: 1 };
+  const r = await axios.get(url, { params, timeout: 20000, validateStatus: () => true });
+  if (r.status !== 200) return null;
+  const top = r.data?.candidates?.[0];
+  if (!top?.location) return null;
+  const { x, y } = top.location;
+  if (typeof x !== "number" || typeof y !== "number") return null;
+  return { lat: y, lng: x, matched: top.address || singleLine, score: top.score };
+}
+
 export default async function handler(req, res){
   try{
     if(req.method!=="POST"){ res.status(405).json({ error:"Use POST with JSON body { assetId, dataset }" }); return; }
     const { assetId, dataset } = await readJson(req);
     if(!assetId || !dataset){ res.status(400).json({ error:"Missing assetId or dataset" }); return; }
 
-    const targetKeys = dataset === "montgomery_county"
-      ? MONTGOMERY_ANY
-      : [dataset];
+    const ds = DATASETS[dataset];
+    if(!ds){ res.status(400).json({ error:`Unknown dataset '${dataset}'` }); return; }
 
-    let found = null;
-    let usedKey = null;
+    const isTmdl = dataset.startsWith("mdsha_tmdl_");
 
-    for (const key of targetKeys) {
-      const ds = DATASETS[key];
-      if(!ds) continue;
-      const isTmdl = key.startsWith("mdsha_tmdl_");
-      const url = `${ds.base}/query`;
+    let found = null; // { geometry, attributes, label }
 
-      // Pass A: exact
+    // Montgomery (unified): iterate over inner layers, exact then LIKE
+    if (dataset === "montgomery_county") {
+      const passes = ["exact", "like"];
+      for (const pass of passes) {
+        for (const lyr of ds.layers) {
+          const params = {
+            where: (pass === "exact")
+              ? buildWhereExact(lyr.idFields, assetId, false)
+              : buildWhereLike (lyr.idFields, assetId, false),
+            outFields: "*",
+            returnGeometry: true,
+            outSR: 4326,
+            f: "json"
+          };
+          const feats = await arcQueryJson(lyr.base, params);
+          if (feats.length) {
+            found = { geometry: feats[0].geometry || {}, attributes: feats[0].attributes || {}, label: lyr.label };
+            break;
+          }
+        }
+        if (found) break;
+      }
+
+      // ✅ Geocoder fallback for addresses
+      if (!found && looksLikeAddress(assetId)) {
+        const g = await geocodeMontgomery(assetId);
+        if (g) {
+          const googleMapsUrl = `https://www.google.com/maps?q=${g.lat.toFixed(6)},${g.lng.toFixed(6)}`;
+          res.status(200).json({
+            assetId,
+            dataset,
+            centroid: { lat: g.lat, lng: g.lng },
+            googleMapsUrl,
+            properties: { _geocoded: true, MatchedAddress: g.matched, Score: g.score }
+          });
+          return;
+        }
+      }
+    } else {
+      // All other single-layer datasets
       const paramsExact = {
         where: buildWhereExact(ds.idFields, assetId, isTmdl),
         outFields: "*",
@@ -149,10 +218,8 @@ export default async function handler(req, res){
         outSR: 4326,
         f: "json"
       };
-      let r = await axios.get(url, { params: paramsExact, timeout: 20000 });
-      let feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+      let feats = await arcQueryJson(ds.base, paramsExact);
 
-      // Pass B: LIKE
       if(!feats.length){
         const paramsLike = {
           where: buildWhereLike(ds.idFields, assetId, isTmdl),
@@ -161,14 +228,11 @@ export default async function handler(req, res){
           outSR: 4326,
           f: "json"
         };
-        r = await axios.get(url, { params: paramsLike, timeout: 20000 });
-        feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+        feats = await arcQueryJson(ds.base, paramsLike);
       }
 
       if (feats.length) {
-        found = feats[0];
-        usedKey = key;
-        break;
+        found = { geometry: feats[0].geometry || {}, attributes: feats[0].attributes || {}, label: dataset };
       }
     }
 
@@ -184,14 +248,7 @@ export default async function handler(req, res){
     if(!c){ res.status(500).json({ error:"Unable to compute centroid" }); return; }
 
     const googleMapsUrl = `https://www.google.com/maps?q=${c.lat.toFixed(6)},${c.lng.toFixed(6)}`;
-    res.status(200).json({
-      assetId,
-      dataset,
-      datasetUsed: usedKey,
-      centroid:c,
-      googleMapsUrl,
-      properties: found.attributes || {}
-    });
+    res.status(200).json({ assetId, dataset, centroid:c, googleMapsUrl, properties: found.attributes || {}, sourceLabel: found.label });
 
   }catch(err){
     res.status(500).json({ error: err?.message || String(err) });
