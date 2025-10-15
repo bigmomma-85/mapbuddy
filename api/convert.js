@@ -47,14 +47,33 @@ const DATASETS = {
     label: "TMDL — Outfall Stabilizations",
   },
 
-  // --- NEW: Leesburg, VA — BMPs (ArcGIS Online, layer 51)
-  // Accept typical object id fields; users will pick this dataset in the UI.
-  leesburg_bmps: {
-    base: "https://services1.arcgis.com/7owdfh5mgjEgbCSM/arcgis/rest/services/LEESBURG/FeatureServer/51",
-    idFields: ["OBJECTID", "OBJECTID_1", "GlobalID"],
-    label: "Leesburg — BMPs",
-  }
+  // ---------- MONTGOMERY COUNTY (unified) ----------
+  // Stormwater Facilities (points)
+  montgomery_swfac: {
+    base: "https://depgis.montgomerycountymd.gov/arcgis/rest/services/DEP_Public/DEP_Stormwater/MapServer/2",
+    idFields: ["ASSET", "SEQNO", "PROP_NAME"],
+    label: "Montgomery — Stormwater Facilities",
+  },
+  // Tree Inventory (points)
+  montgomery_trees: {
+    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/DOT/MCDOT_Tree_Inventory_FY22/MapServer/0",
+    idFields: ["TREE_ID", "TREE_NUMBER", "TREEID", "TREENUMBER", "OBJECTID"],
+    label: "Montgomery — Tree Inventory",
+  },
+  // County Buildings (polygons)
+  montgomery_buildings: {
+    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/BLDG_PS/MapServer/0",
+    idFields: ["OBJECTID", "SITE_NAME", "ADDR"],
+    label: "Montgomery — County Buildings",
+  },
+  // Communities & Municipalities (polygons)
+  montgomery_communities: {
+    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/communities_w_muni/MapServer/0",
+    idFields: ["NAME"],
+    label: "Montgomery — Communities & Municipalities",
+  },
 };
+
 const TMDL_ANY = [
   "mdsha_tmdl_structures",
   "mdsha_tmdl_retrofits",
@@ -62,6 +81,14 @@ const TMDL_ANY = [
   "mdsha_tmdl_pavement_removals",
   "mdsha_tmdl_stream_restorations",
   "mdsha_tmdl_outfall_stabilizations",
+];
+
+// unified Montgomery list
+const MONTGOMERY_ANY = [
+  "montgomery_swfac",
+  "montgomery_trees",
+  "montgomery_buildings",
+  "montgomery_communities",
 ];
 
 // ---------- helpers ----------
@@ -161,7 +188,10 @@ export default async function handler(req, res) {
     let datasetKey = inputDataset || guessDatasetFromId(assetId);
     if (!datasetKey) { res.status(400).json({ error: "Unknown dataset. Pick one or use a recognizable ID." }); return; }
 
-    const targets = datasetKey === "mdsha_tmdl_any" ? TMDL_ANY : [datasetKey];
+    const targets =
+      datasetKey === "mdsha_tmdl_any"   ? TMDL_ANY :
+      datasetKey === "montgomery_county" ? MONTGOMERY_ANY :
+      [datasetKey];
 
     // Pass A: exact; Pass B: LIKE
     const passes = ["exact", "like"];
