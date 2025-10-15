@@ -40,12 +40,32 @@ const DATASETS = {
     idFields: ["ASSET_ID", "STRU_ID", "NAME", "PROJECT_ID", "STRUCTURE_ID", "STRUCT_ID", "FACILITY_ID", "FACILITYID"]
   },
 
-  // --- NEW: Leesburg, VA — BMPs (ArcGIS Online, layer 51)
-  leesburg_bmps: {
-    base: "https://services1.arcgis.com/7owdfh5mgjEgbCSM/arcgis/rest/services/LEESBURG/FeatureServer/51",
-    idFields: ["OBJECTID", "OBJECTID_1", "GlobalID"]
+  // ---------- MONTGOMERY COUNTY (unified) ----------
+  montgomery_swfac: {
+    base: "https://depgis.montgomerycountymd.gov/arcgis/rest/services/DEP_Public/DEP_Stormwater/MapServer/2",
+    idFields: ["ASSET", "SEQNO", "PROP_NAME"]
+  },
+  montgomery_trees: {
+    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/DOT/MCDOT_Tree_Inventory_FY22/MapServer/0",
+    idFields: ["TREE_ID", "TREE_NUMBER", "TREEID", "TREENUMBER", "OBJECTID"]
+  },
+  montgomery_buildings: {
+    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/BLDG_PS/MapServer/0",
+    idFields: ["OBJECTID", "SITE_NAME", "ADDR"]
+  },
+  montgomery_communities: {
+    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/communities_w_muni/MapServer/0",
+    idFields: ["NAME"]
   }
 };
+
+// unified Montgomery list
+const MONTGOMERY_ANY = [
+  "montgomery_swfac",
+  "montgomery_trees",
+  "montgomery_buildings",
+  "montgomery_communities",
+];
 
 const esc = (v) => String(v).replace(/'/g, "''");
 
@@ -108,39 +128,53 @@ export default async function handler(req, res){
     const { assetId, dataset } = await readJson(req);
     if(!assetId || !dataset){ res.status(400).json({ error:"Missing assetId or dataset" }); return; }
 
-    const ds = DATASETS[dataset];
-    if(!ds){ res.status(400).json({ error:`Unknown dataset '${dataset}'` }); return; }
+    const targetKeys = dataset === "montgomery_county"
+      ? MONTGOMERY_ANY
+      : [dataset];
 
-    const isTmdl = dataset.startsWith("mdsha_tmdl_");
-    const url = `${ds.base}/query`;
+    let found = null;
+    let usedKey = null;
 
-    // Pass A: exact
-    const paramsExact = {
-      where: buildWhereExact(ds.idFields, assetId, isTmdl),
-      outFields: "*",
-      returnGeometry: true,
-      outSR: 4326,
-      f: "json"
-    };
-    let r = await axios.get(url, { params: paramsExact, timeout: 20000 });
-    let feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+    for (const key of targetKeys) {
+      const ds = DATASETS[key];
+      if(!ds) continue;
+      const isTmdl = key.startsWith("mdsha_tmdl_");
+      const url = `${ds.base}/query`;
 
-    // Pass B: LIKE
-    if(!feats.length){
-      const paramsLike = {
-        where: buildWhereLike(ds.idFields, assetId, isTmdl),
+      // Pass A: exact
+      const paramsExact = {
+        where: buildWhereExact(ds.idFields, assetId, isTmdl),
         outFields: "*",
         returnGeometry: true,
         outSR: 4326,
         f: "json"
       };
-      r = await axios.get(url, { params: paramsLike, timeout: 20000 });
-      feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+      let r = await axios.get(url, { params: paramsExact, timeout: 20000 });
+      let feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+
+      // Pass B: LIKE
+      if(!feats.length){
+        const paramsLike = {
+          where: buildWhereLike(ds.idFields, assetId, isTmdl),
+          outFields: "*",
+          returnGeometry: true,
+          outSR: 4326,
+          f: "json"
+        };
+        r = await axios.get(url, { params: paramsLike, timeout: 20000 });
+        feats = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+      }
+
+      if (feats.length) {
+        found = feats[0];
+        usedKey = key;
+        break;
+      }
     }
 
-    if(!feats.length){ res.status(404).json({ error: "No feature found" }); return; }
+    if(!found){ res.status(404).json({ error: "No feature found" }); return; }
 
-    const g = feats[0].geometry || {};
+    const g = found.geometry || {};
     let geo = null;
     if (Array.isArray(g.rings))      geo = { type:"Polygon",        coordinates:g.rings };
     else if (Array.isArray(g.paths)) geo = g.paths.length===1 ? { type:"LineString", coordinates:g.paths[0] } : { type:"MultiLineString", coordinates:g.paths };
@@ -150,7 +184,14 @@ export default async function handler(req, res){
     if(!c){ res.status(500).json({ error:"Unable to compute centroid" }); return; }
 
     const googleMapsUrl = `https://www.google.com/maps?q=${c.lat.toFixed(6)},${c.lng.toFixed(6)}`;
-    res.status(200).json({ assetId, dataset, centroid:c, googleMapsUrl, properties: feats[0].attributes || {} });
+    res.status(200).json({
+      assetId,
+      dataset,
+      datasetUsed: usedKey,
+      centroid:c,
+      googleMapsUrl,
+      properties: found.attributes || {}
+    });
 
   }catch(err){
     res.status(500).json({ error: err?.message || String(err) });
