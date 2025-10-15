@@ -47,33 +47,51 @@ const DATASETS = {
     label: "TMDL — Outfall Stabilizations",
   },
 
-  // ---------- MONTGOMERY COUNTY (unified) ----------
-  // Stormwater Facilities (points)
-  montgomery_swfac: {
-    base: "https://depgis.montgomerycountymd.gov/arcgis/rest/services/DEP_Public/DEP_Stormwater/MapServer/2",
-    idFields: ["ASSET", "SEQNO", "PROP_NAME"],
-    label: "Montgomery — Stormwater Facilities",
-  },
-  // Tree Inventory (points)
-  montgomery_trees: {
-    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/DOT/MCDOT_Tree_Inventory_FY22/MapServer/0",
-    idFields: ["TREE_ID", "TREE_NUMBER", "TREEID", "TREENUMBER", "OBJECTID"],
-    label: "Montgomery — Tree Inventory",
-  },
-  // County Buildings (polygons)
-  montgomery_buildings: {
-    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/BLDG_PS/MapServer/0",
-    idFields: ["OBJECTID", "SITE_NAME", "ADDR"],
-    label: "Montgomery — County Buildings",
-  },
-  // Communities & Municipalities (polygons)
-  montgomery_communities: {
-    base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/communities_w_muni/MapServer/0",
-    idFields: ["NAME"],
-    label: "Montgomery — Communities & Municipalities",
-  },
+  // ✅ Unified Montgomery County (stormwater + buildings + communities + municipalities + tree inventory)
+  // NOTE: we include address-friendly fields so spreadsheet addresses can match if present in attributes.
+  montgomery_county: {
+    // This "virtual" dataset has multiple underlying layers tried in order.
+    // Each entry: { base, idFields, type: "point"|"polygon"|"line" }
+    layers: [
+      // DEP Stormwater Facilities (points) — address-friendly fields included
+      {
+        base: "https://depgis.montgomerycountymd.gov/arcgis/rest/services/DEP_Public/DEP_Stormwater/MapServer/2",
+        idFields: ["ASSET", "SEQNO", "PROP_NAME", "P_ST_ADD", "Acct", "P_ACCT", "GRID", "INSP_REG", "Type_Desc"],
+        type: "point",
+        label: "Montgomery — DEP Stormwater Facilities (points)"
+      },
+      // County Buildings (polygons)
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/BLDG_PS/MapServer/0",
+        idFields: ["NAME", "ALIAS_NAME", "AGENCYNAME", "ADDRESS", "FULLADDR"],
+        type: "polygon",
+        label: "Montgomery — County Buildings"
+      },
+      // Communities with municipalities (polygons)
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/communities_w_muni/MapServer/0",
+        idFields: ["NAME", "COMMUNITY", "MUNICIPALITY", "MUNI_NAME"],
+        type: "polygon",
+        label: "Montgomery — Communities & Municipalities"
+      },
+      // Municipalities (polygons)
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/General/municipalities/MapServer/0",
+        idFields: ["NAME", "MUNI_NAME"],
+        type: "polygon",
+        label: "Montgomery — Municipalities"
+      },
+      // Tree Inventory (points)
+      {
+        base: "https://gis.montgomerycountymd.gov/arcgis/rest/services/DOT/MCDOT_Tree_Inventory_FY22/MapServer/0",
+        idFields: ["TREE_ID", "SITE_NAME", "STREETNAME", "ADDRNUM", "FULLADDR", "COMMUNITY"],
+        type: "point",
+        label: "Montgomery — Tree Inventory (FY22)"
+      }
+    ],
+    label: "Montgomery County (Unified)"
+  }
 };
-
 const TMDL_ANY = [
   "mdsha_tmdl_structures",
   "mdsha_tmdl_retrofits",
@@ -81,14 +99,6 @@ const TMDL_ANY = [
   "mdsha_tmdl_pavement_removals",
   "mdsha_tmdl_stream_restorations",
   "mdsha_tmdl_outfall_stabilizations",
-];
-
-// unified Montgomery list
-const MONTGOMERY_ANY = [
-  "montgomery_swfac",
-  "montgomery_trees",
-  "montgomery_buildings",
-  "montgomery_communities",
 ];
 
 // ---------- helpers ----------
@@ -110,6 +120,12 @@ function guessDatasetFromId(id) {
   if (s.startsWith("LOD_")) return "mdsha_landscape";
   if (isTmdlLike(s)) return "mdsha_tmdl_any";
   return null;
+}
+
+function looksLikeAddress(s) {
+  const t = String(s || "").trim();
+  // crude heuristic: has a number + a space + a word → likely an address
+  return /\d+\s+\S+/.test(t);
 }
 
 function tmdlVariants(assetId) {
@@ -174,6 +190,37 @@ async function getMapshaperApply() {
   return ms.applyCommands || (ms.default && ms.default.applyCommands);
 }
 
+// ---------- Montgomery County Geocoder (fallback for addresses) ----------
+async function geocodeMontgomery(singleLine) {
+  const url = "https://gis.montgomerycountymd.gov/geocoding/rest/services/Locators/CompositeLocator/GeocodeServer/findAddressCandidates";
+  const params = {
+    SingleLine: singleLine,
+    outSR: 4326,
+    f: "pjson",
+    maxLocations: 1
+  };
+  const r = await axios.get(url, { params, timeout: 20000, validateStatus: () => true });
+  if (r.status !== 200) return null;
+  const cands = r.data?.candidates || [];
+  const top = cands[0];
+  if (!top?.location) return null;
+  const { x, y } = top.location;
+  if (typeof x !== "number" || typeof y !== "number") return null;
+  return {
+    type: "FeatureCollection",
+    features: [{
+      type: "Feature",
+      properties: {
+        _geocoded: true,
+        _sourceLabel: "Montgomery County Geocoder",
+        MatchedAddress: top.address || singleLine,
+        Score: top.score
+      },
+      geometry: { type: "Point", coordinates: [x, y] }
+    }]
+  };
+}
+
 // ---------- main ----------
 export default async function handler(req, res) {
   try {
@@ -188,33 +235,67 @@ export default async function handler(req, res) {
     let datasetKey = inputDataset || guessDatasetFromId(assetId);
     if (!datasetKey) { res.status(400).json({ error: "Unknown dataset. Pick one or use a recognizable ID." }); return; }
 
-    const targets =
-      datasetKey === "mdsha_tmdl_any"   ? TMDL_ANY :
-      datasetKey === "montgomery_county" ? MONTGOMERY_ANY :
-      [datasetKey];
+    const targets = datasetKey === "mdsha_tmdl_any" ? TMDL_ANY : [datasetKey];
 
     // Pass A: exact; Pass B: LIKE
     const passes = ["exact", "like"];
-    let fc = null, usedKey = null, usedLabel = null;
+    let fc = null;
 
     for (const pass of passes) {
       for (const key of targets) {
-        const ds = DATASETS[key]; if (!ds) continue;
+        const ds = DATASETS[key];
+        if (!ds) continue;
+
+        // Unified Montgomery: iterate its inner layers
+        if (key === "montgomery_county") {
+          for (const lyr of ds.layers) {
+            const where = pass === "exact"
+              ? buildWhereExact(lyr.idFields, assetId, false)
+              : buildWhereLike (lyr.idFields, assetId, false);
+
+            try {
+              const gj = await fetchArcgisAsGeoJSON(lyr.base, where);
+              if (gj.features.length) {
+                const feat = gj.features[0];
+                feat.properties = {
+                  ...feat.properties,
+                  _assetId: assetId,
+                  _dataset: key,
+                  _sourceLabel: lyr.label,
+                  _matchMode: pass
+                };
+                fc = { type: "FeatureCollection", features: [feat] };
+                break;
+              }
+            } catch { /* keep trying */ }
+          }
+          if (fc) break;
+          continue;
+        }
+
+        // All other single-layer datasets
         const useVariants = key.startsWith("mdsha_tmdl_");
         const where = pass === "exact"
-          ? buildWhereExact(ds.idFields, assetId, useVariants)
-          : buildWhereLike (ds.idFields, assetId, useVariants);
+          ? buildWhereExact(DATASETS[key].idFields, assetId, useVariants)
+          : buildWhereLike (DATASETS[key].idFields, assetId, useVariants);
 
-        const gj = await fetchArcgisAsGeoJSON(ds.base, where);
+        const gj = await fetchArcgisAsGeoJSON(DATASETS[key].base, where);
         if (gj.features.length) {
-          usedKey = key; usedLabel = ds.label;
           const feat = gj.features[0];
-          feat.properties = { ...feat.properties, _assetId: assetId, _dataset: key, _sourceLabel: ds.label, _matchMode: pass };
+          feat.properties = { ...feat.properties, _assetId: assetId, _dataset: key, _sourceLabel: DATASETS[key].label, _matchMode: pass };
           fc = { type: "FeatureCollection", features: [feat] };
           break;
         }
       }
       if (fc) break;
+    }
+
+    // ✅ Geocoder fallback for Montgomery County if no GIS feature was matched
+    if (!fc && targets.length === 1 && targets[0] === "montgomery_county" && looksLikeAddress(assetId)) {
+      const gj = await geocodeMontgomery(assetId);
+      if (gj?.features?.length) {
+        fc = gj;
+      }
     }
 
     if (!fc) {
